@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UploadCloud, Sparkles, Check, RefreshCw, AlertCircle, Wand2, ShieldCheck, Image as ImageIcon } from 'lucide-react';
+import { X, UploadCloud, Sparkles, Check, RefreshCw, AlertCircle } from 'lucide-react';
 import { processJewelleryImage } from '../utils/imageProcessor';
 
 const inputStyle = {
@@ -26,29 +26,25 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('necklace');
   const [tag, setTag] = useState('New Arrival');
-  const [bgMode, setBgMode] = useState('smart_gold'); // 'smart_gold' | 'neural_ai' | 'none'
 
   const [previewUrl, setPreviewUrl] = useState('');
   const [rawFile, setRawFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progressStatus, setProgressStatus] = useState('Smart Gold Precision BG Removal...');
+  const [progressStatus, setProgressStatus] = useState('Processing Image...');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleImageFile = async (file, selectedMode = bgMode) => {
+  const handleImageFile = async (file) => {
     if (!file) return;
     setRawFile(file);
     setErrorMessage('');
     setIsProcessing(true);
-    setProgressStatus(selectedMode === 'neural_ai' ? 'Initializing AI Neural Net...' : 'Smart Gold Precision BG Removal...');
+    setProgressStatus('Processing Image...');
 
     try {
-      const result = await processJewelleryImage(file, {
-        mode: selectedMode,
-        onProgress: (msg) => setProgressStatus(msg)
-      });
+      const result = await processJewelleryImage(file);
 
       if (!result.success) {
         setErrorMessage(result.error || 'Failed to process image file.');
@@ -62,13 +58,6 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
       console.error('File processing error:', err);
       setErrorMessage('Failed to process image file.');
       setIsProcessing(false);
-    }
-  };
-
-  const handleModeChange = (newMode) => {
-    setBgMode(newMode);
-    if (rawFile) {
-      handleImageFile(rawFile, newMode);
     }
   };
 
@@ -144,7 +133,7 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
           </h2>
         </div>
         <p style={{ fontSize: '12px', color: '#9499AD', margin: '0 0 16px 0' }}>
-          Upload any photo. Smart Gold Retain preserves 100% of fine Laxmi coins, chains, & rubies!
+          Upload any jewellery photo to add it to your studio catalog.
         </p>
 
         {isSuccess ? (
@@ -160,85 +149,10 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
               <Check style={{ width: '24px', height: '24px', strokeWidth: 3 }} />
             </div>
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#F5F6FA', margin: 0 }}>Design Added to Catalog!</h3>
-            <p style={{ fontSize: '12px', color: '#9499AD', margin: 0 }}>Ready for instant virtual try-on.</p>
+            <p style={{ fontSize: '12px', color: '#9499AD', margin: 0 }}>Ready for virtual studio try-on.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Background Removal Mode Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <span style={labelStyle}>Background Removal Mode</span>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => handleModeChange('smart_gold')}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
-                    cursor: 'pointer',
-                    backgroundColor: bgMode === 'smart_gold' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    color: bgMode === 'smart_gold' ? '#F3E5AB' : '#9499AD',
-                    border: bgMode === 'smart_gold' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <ShieldCheck style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
-                  <span>Smart Gold Retain</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleModeChange('neural_ai')}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
-                    cursor: 'pointer',
-                    backgroundColor: bgMode === 'neural_ai' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    color: bgMode === 'neural_ai' ? '#F3E5AB' : '#9499AD',
-                    border: bgMode === 'neural_ai' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <Wand2 style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
-                  <span>Neural AI</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleModeChange('none')}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
-                    cursor: 'pointer',
-                    backgroundColor: bgMode === 'none' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    color: bgMode === 'none' ? '#F3E5AB' : '#9499AD',
-                    border: bgMode === 'none' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <ImageIcon style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
-                  <span>Keep Original</span>
-                </button>
-              </div>
-            </div>
-
             {/* Image Dropzone */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{
@@ -266,7 +180,6 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '16px 0' }}>
                     <RefreshCw style={{ width: '28px', height: '28px', color: '#D4AF37', animation: 'spin 1s linear infinite' }} />
                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#F3E5AB' }}>{progressStatus}</span>
-                    <span style={{ fontSize: '10px', color: '#9499AD' }}>Full native resolution precision matting...</span>
                   </div>
                 ) : previewUrl ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
@@ -286,7 +199,6 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
                   <>
                     <UploadCloud style={{ width: '32px', height: '32px', color: 'rgba(212, 175, 55, 0.7)' }} />
                     <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: '500' }}>Click to upload jewellery image (PNG, JPG, WebP)</span>
-                    <span style={{ fontSize: '10px', color: '#6B7280' }}>100% full-resolution detail preservation</span>
                   </>
                 )}
               </div>

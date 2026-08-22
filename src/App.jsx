@@ -1,18 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import Navbar from './components/Navbar';
-import TryOnCanvas from './components/TryOnCanvas';
+import AIGeneratedTryOnStudio from './components/AIGeneratedTryOnStudio';
 import JewelleryCatalog from './components/JewelleryCatalog';
-import FineTuneControls from './components/FineTuneControls';
 import AdminUploaderModal from './components/AdminUploaderModal';
-import SnapshotModal from './components/SnapshotModal';
 import { INITIAL_JEWELLERY_CATALOG } from './utils/sampleData';
-import { Sparkles, PlusCircle } from 'lucide-react';
+import { PlusCircle, Wand2 } from 'lucide-react';
 
 export default function App() {
-  const [mode, setMode] = useState('webcam');
-  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState(null);
-  const fileInputRef = useRef(null);
-
   const [catalog, setCatalog] = useState(() => {
     const saved = localStorage.getItem('jewellery_custom_catalog');
     if (saved) {
@@ -27,37 +21,10 @@ export default function App() {
   });
 
   const [selectedItem, setSelectedItem] = useState(catalog[0] || null);
-
-  const [fineTune, setFineTune] = useState({
-    scale: 1.0,
-    offsetY: 0,
-    tilt: 0,
-    opacity: 1.0
-  });
-
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState(false);
-  const [activeCanvas, setActiveCanvas] = useState(null);
 
   const handleSelectItem = (item) => {
     setSelectedItem(item);
-    setFineTune({
-      scale: item.defaultScale || 1.0,
-      offsetY: item.defaultOffsetY || 0,
-      tilt: 0,
-      opacity: 1.0
-    });
-  };
-
-  const handleUploadPhotoFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setUploadedPhotoUrl(event.target.result);
-      setMode('upload');
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleAddJewellery = (newItem) => {
@@ -71,83 +38,57 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#090A0F', color: '#F5F6FA', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', sans-serif" }}>
       {/* Top Navbar */}
-      <Navbar
-        mode={mode}
-        onSetMode={setMode}
-        onTakeSnapshot={() => setIsSnapshotModalOpen(true)}
-      />
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleUploadPhotoFile}
-      />
+      <Navbar />
 
       {/* Main Content */}
-      <main style={{ flex: 1, maxWidth: '1280px', width: '100%', margin: '0 auto', padding: '20px 24px' }}>
+      <main style={{ flex: 1, maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-        {/* Quick Guide Banner */}
+        {/* Header Banner */}
         <div style={{
-          background: 'linear-gradient(90deg, rgba(120, 80, 0, 0.15), rgba(18, 20, 29, 0.9), rgba(120, 80, 0, 0.15))',
-          border: '1px solid rgba(212, 175, 55, 0.2)',
-          borderRadius: '12px',
-          padding: '12px 16px',
+          background: 'linear-gradient(90deg, rgba(120, 80, 0, 0.2), rgba(18, 20, 29, 0.95), rgba(120, 80, 0, 0.2))',
+          border: '1px solid rgba(212, 175, 55, 0.3)',
+          borderRadius: '16px',
+          padding: '16px 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '10px',
-          marginBottom: '20px'
+          gap: '12px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F3E5AB', fontSize: '12px', fontWeight: '500' }}>
-            <Sparkles style={{ width: '16px', height: '16px', color: '#D4AF37', flexShrink: 0 }} />
-            <span><strong>Quick Guide:</strong> 1. Camera / Upload Photo → 2. Select Jewellery → 3. Fine-Tune Fit → 4. Capture</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.15)', border: '1px solid rgba(212, 175, 55, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Wand2 style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
+            </div>
+            <div>
+              <h2 className="font-heading text-gold-gradient" style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>
+                Marne Jewellery Studio Platform
+              </h2>
+              <p style={{ fontSize: '11px', color: '#9499AD', margin: '2px 0 0 0' }}>
+                Select Jewellery → Upload Photo → Generate Result
+              </p>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={() => setIsUploadModalOpen(true)}
-            className="btn-secondary"
-            style={{ fontSize: '11px', padding: '6px 14px', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+            className="btn-gold"
+            style={{ fontSize: '12px', padding: '9px 18px' }}
           >
-            <PlusCircle style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
-            <span>Add Jewellery</span>
+            <PlusCircle style={{ width: '15px', height: '15px' }} />
+            <span>Add Jewellery Design</span>
           </button>
         </div>
 
-        {/* 2-Column Workbench: Canvas (left) + Controls (right) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 340px',
-          gap: '20px',
-          alignItems: 'start',
-          marginBottom: '20px'
-        }}>
-          {/* Left: AR Try-On Viewport */}
-          <div style={{ width: '100%' }}>
-            <TryOnCanvas
-              mode={mode}
-              uploadedPhotoUrl={uploadedPhotoUrl}
-              selectedItem={selectedItem}
-              fineTune={fineTune}
-              onCanvasReady={setActiveCanvas}
-              onTriggerUpload={() => fileInputRef.current?.click()}
-            />
-          </div>
+        {/* Guided 2-Step Try-On Studio */}
+        <AIGeneratedTryOnStudio
+          catalog={catalog}
+          selectedItem={selectedItem}
+          onSelectItem={handleSelectItem}
+          onOpenUploadModal={() => setIsUploadModalOpen(true)}
+        />
 
-          {/* Right: Fine-Tune Controls Panel */}
-          <div style={{ width: '100%' }}>
-            <FineTuneControls
-              fineTune={fineTune}
-              onChange={setFineTune}
-              onReset={() => setFineTune({ scale: 1.0, offsetY: 0, tilt: 0, opacity: 1.0 })}
-            />
-          </div>
-        </div>
-
-        {/* Bottom: Jewellery Catalog */}
+        {/* Full-Width Jewellery Catalog */}
         <div className="glass-card" style={{ padding: '20px', borderRadius: '16px' }}>
           <JewelleryCatalog
             catalog={catalog}
@@ -168,7 +109,7 @@ export default function App() {
         color: '#6B7280',
         marginTop: 'auto'
       }}>
-        Marne Jewellery • Virtual AR Studio Platform
+        Marne Jewellery • Virtual Studio Platform
       </footer>
 
       {/* Modals */}
@@ -176,12 +117,6 @@ export default function App() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onAddJewellery={handleAddJewellery}
-      />
-      <SnapshotModal
-        isOpen={isSnapshotModalOpen}
-        onClose={() => setIsSnapshotModalOpen(false)}
-        canvasRef={activeCanvas}
-        selectedItem={selectedItem}
       />
     </div>
   );

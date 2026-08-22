@@ -79,17 +79,12 @@ export function calculateJewelleryTransform(
 
   if (category === 'necklace') {
     const jawWidth = Math.hypot(rightJaw.x - leftJaw.x, rightJaw.y - leftJaw.y);
-    const baseScale = (jawWidth / 125) * userScale;
+    const baseScale = (jawWidth / 140) * userScale;
 
-    // REALISTIC NECK & CLAVICLE ANCHORING:
-    // A necklace rests on the chest/collarbone below the neck, NOT attached to chin.
-    // It remains anchored on the chest plane even when head tilts up/down.
-    const neckCenterX = chin.x + (yaw * jawWidth * 0.15);
-
-    // Collarbone rest position math:
-    const collarboneDistance = faceHeight * 0.38;
-    const pitchCorrection = pitch * faceHeight * 0.12; // Compensate head pitch tilt
-    const necklaceY = chin.y + collarboneDistance + pitchCorrection + yShift;
+    // EXACT ANATOMICAL NECK FIT (MATCHES USER TARGET SCREENSHOT):
+    // Necklaces rest right at the collarbone line below the chin (chin.y + 0.28 * faceHeight).
+    const neckCenterX = chin.x + (yaw * jawWidth * 0.12);
+    const necklaceY = chin.y + (faceHeight * 0.28) + (pitch * faceHeight * 0.1) + yShift;
 
     return {
       type: 'single',
@@ -97,12 +92,12 @@ export function calculateJewelleryTransform(
       y: necklaceY,
       scaleX: baseScale * cosYaw,
       scaleY: baseScale * cosPitch,
-      angle: roll * 0.75, // Neck rotates slightly less than full head roll
+      angle: roll * 0.75,
       yaw,
       pitch,
       roll,
-      shadowBlur: 20 * baseScale,
-      shadowOffsetY: 12 * baseScale,
+      shadowBlur: 16 * baseScale,
+      shadowOffsetY: 8 * baseScale,
       contactShadowColor: 'rgba(25, 10, 0, 0.45)'
     };
   }
@@ -112,11 +107,8 @@ export function calculateJewelleryTransform(
 
     // Gravity Dangle Effect: Heavy jhumkas hang vertically with damped roll angle
     const jhumkaAngle = roll * 0.4;
-
-    // Earlobe Vertical Drop
     const earDropY = (faceHeight * 0.045);
 
-    // 3D Occlusion: Far earring shrinks and fades when turning head
     const leftYawFactor = 1 - (yaw * 0.45);
     const rightYawFactor = 1 + (yaw * 0.45);
 
@@ -215,12 +207,12 @@ function getFallbackTransform(category, width, height, fineTune = {}) {
     return {
       type: 'single',
       x: width * 0.50,
-      y: height * 0.72 + offsetY,
-      scaleX: 1.0 * scale,
-      scaleY: 1.0 * scale,
+      y: height * 0.65 + offsetY,
+      scaleX: 0.85 * scale,
+      scaleY: 0.85 * scale,
       angle: rad,
       shadowBlur: 16,
-      shadowOffsetY: 10
+      shadowOffsetY: 8
     };
   }
   if (category === 'maang_tikka') {
