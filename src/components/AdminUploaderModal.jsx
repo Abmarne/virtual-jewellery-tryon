@@ -1,32 +1,53 @@
 import React, { useState } from 'react';
-import { X, UploadCloud, Sparkles, Check, RefreshCw, AlertCircle, Wand2, Sliders } from 'lucide-react';
+import { X, UploadCloud, Sparkles, Check, RefreshCw, AlertCircle, Wand2, ShieldCheck, Image as ImageIcon } from 'lucide-react';
 import { processJewelleryImage } from '../utils/imageProcessor';
+
+const inputStyle = {
+  backgroundColor: '#12141D',
+  color: '#E2E8F0',
+  fontSize: '13px',
+  padding: '10px 14px',
+  borderRadius: '10px',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  outline: 'none',
+  width: '100%',
+  fontFamily: "'Outfit', sans-serif"
+};
+
+const labelStyle = {
+  fontSize: '12px',
+  fontWeight: '600',
+  color: '#CBD5E1',
+  marginBottom: '4px',
+  display: 'block'
+};
 
 export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('earrings');
+  const [category, setCategory] = useState('necklace');
   const [tag, setTag] = useState('New Arrival');
-  const [autoRemoveBg, setAutoRemoveBg] = useState(true);
-  const [tolerance, setTolerance] = useState(35); // 10 to 80 sensitivity
+  const [bgMode, setBgMode] = useState('smart_gold'); // 'smart_gold' | 'neural_ai' | 'none'
 
   const [previewUrl, setPreviewUrl] = useState('');
   const [rawFile, setRawFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStatus, setProgressStatus] = useState('Smart Gold Precision BG Removal...');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleImageFile = async (file, shouldRemoveBg = autoRemoveBg, tol = tolerance) => {
+  const handleImageFile = async (file, selectedMode = bgMode) => {
     if (!file) return;
     setRawFile(file);
     setErrorMessage('');
     setIsProcessing(true);
+    setProgressStatus(selectedMode === 'neural_ai' ? 'Initializing AI Neural Net...' : 'Smart Gold Precision BG Removal...');
 
     try {
       const result = await processJewelleryImage(file, {
-        removeBg: shouldRemoveBg,
-        tolerance: tol
+        mode: selectedMode,
+        onProgress: (msg) => setProgressStatus(msg)
       });
 
       if (!result.success) {
@@ -39,24 +60,15 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
       setIsProcessing(false);
     } catch (err) {
       console.error('File processing error:', err);
-      setErrorMessage('Failed to process image.');
+      setErrorMessage('Failed to process image file.');
       setIsProcessing(false);
     }
   };
 
-  const handleBgToggle = (e) => {
-    const checked = e.target.checked;
-    setAutoRemoveBg(checked);
+  const handleModeChange = (newMode) => {
+    setBgMode(newMode);
     if (rawFile) {
-      handleImageFile(rawFile, checked, tolerance);
-    }
-  };
-
-  const handleToleranceChange = (e) => {
-    const tol = parseInt(e.target.value, 10);
-    setTolerance(tol);
-    if (rawFile && autoRemoveBg) {
-      handleImageFile(rawFile, true, tol);
+      handleImageFile(rawFile, newMode);
     }
   };
 
@@ -69,7 +81,7 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
       name,
       category,
       tag: tag || 'Custom',
-      description: 'Marne Jewellery custom upload design.',
+      description: 'Marne Jewellery custom design.',
       imageUrl: previewUrl,
       defaultScale: 1.0,
       defaultOffsetY: 0
@@ -89,168 +101,263 @@ export default function AdminUploaderModal({ isOpen, onClose, onAddJewellery }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="glass-card w-full max-w-lg p-6 rounded-2xl border border-yellow-500/40 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div style={{
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      zIndex: 9999,
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      backdropFilter: 'blur(12px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px'
+    }}>
+      <div className="glass-card" style={{
+        width: '100%',
+        maxWidth: '520px',
+        padding: '28px',
+        borderRadius: '20px',
+        border: '1px solid rgba(212, 175, 55, 0.4)',
+        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+        position: 'relative'
+      }}>
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-100 bg-gray-900/60 p-1.5 rounded-full"
+          style={{
+            position: 'absolute', top: '16px', right: '16px',
+            background: 'rgba(30, 30, 40, 0.8)',
+            border: 'none', borderRadius: '50%',
+            width: '32px', height: '32px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9CA3AF', cursor: 'pointer'
+          }}
         >
-          <X className="w-4 h-4" />
+          <X style={{ width: '16px', height: '16px' }} />
         </button>
 
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles className="w-5 h-5 text-amber-400" />
-          <h2 className="text-lg font-bold font-heading text-gold-gradient">
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <Sparkles style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
+          <h2 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
             Add Marne Jewellery Design
           </h2>
         </div>
-        <p className="text-xs text-gray-400 mb-4">
-          Upload any photo (PNG, JPG, WebP). Adjust sensitivity slider to remove any studio background cleanly!
+        <p style={{ fontSize: '12px', color: '#9499AD', margin: '0 0 16px 0' }}>
+          Upload any photo. Smart Gold Retain preserves 100% of fine Laxmi coins, chains, & rubies!
         </p>
 
         {isSuccess ? (
-          <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
-            <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center border border-amber-500">
-              <Check className="w-6 h-6 stroke-[3]" />
+          <div style={{ padding: '48px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', textAlign: 'center' }}>
+            <div style={{
+              width: '52px', height: '52px',
+              backgroundColor: 'rgba(212, 175, 55, 0.2)',
+              color: '#D4AF37',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '2px solid #D4AF37'
+            }}>
+              <Check style={{ width: '24px', height: '24px', strokeWidth: 3 }} />
             </div>
-            <h3 className="text-base font-bold text-gray-100">Design Added to Catalog!</h3>
-            <p className="text-xs text-gray-400">Ready for Marne Jewellery virtual try-on.</p>
+            <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#F5F6FA', margin: 0 }}>Design Added to Catalog!</h3>
+            <p style={{ fontSize: '12px', color: '#9499AD', margin: 0 }}>Ready for instant virtual try-on.</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* Image Dropzone */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                <span>Select Jewellery Image</span>
-                <label className="flex items-center gap-1.5 font-normal text-amber-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoRemoveBg}
-                    onChange={handleBgToggle}
-                    className="accent-amber-500 rounded cursor-pointer"
-                  />
-                  <Wand2 className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Remove Background</span>
-                </label>
-              </div>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Background Removal Mode Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={labelStyle}>Background Removal Mode</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('smart_gold')}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: bgMode === 'smart_gold' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                    color: bgMode === 'smart_gold' ? '#F3E5AB' : '#9499AD',
+                    border: bgMode === 'smart_gold' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <ShieldCheck style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
+                  <span>Smart Gold Retain</span>
+                </button>
 
-              <div className="relative border-2 border-dashed border-gray-800 hover:border-amber-500/50 rounded-xl p-4 bg-gray-900/40 flex flex-col items-center justify-center text-center gap-2 transition-colors cursor-pointer min-h-[130px]">
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('neural_ai')}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: bgMode === 'neural_ai' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                    color: bgMode === 'neural_ai' ? '#F3E5AB' : '#9499AD',
+                    border: bgMode === 'neural_ai' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Wand2 style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
+                  <span>Neural AI</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('none')}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: bgMode === 'none' ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                    color: bgMode === 'none' ? '#F3E5AB' : '#9499AD',
+                    border: bgMode === 'none' ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <ImageIcon style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
+                  <span>Keep Original</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Image Dropzone */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{
+                position: 'relative',
+                border: '2px dashed rgba(212, 175, 55, 0.3)',
+                borderRadius: '14px',
+                padding: '20px',
+                backgroundColor: 'rgba(18, 20, 29, 0.5)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                textAlign: 'center', gap: '10px',
+                minHeight: '140px',
+                cursor: 'pointer'
+              }}>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => handleImageFile(e.target.files?.[0])}
-                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
                   required={!previewUrl}
+                  style={{
+                    position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10
+                  }}
                 />
 
                 {isProcessing ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-3">
-                    <RefreshCw className="w-7 h-7 text-amber-400 animate-spin" />
-                    <span className="text-xs font-semibold text-amber-200">Removing background...</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '16px 0' }}>
+                    <RefreshCw style={{ width: '28px', height: '28px', color: '#D4AF37', animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#F3E5AB' }}>{progressStatus}</span>
+                    <span style={{ fontSize: '10px', color: '#9499AD' }}>Full native resolution precision matting...</span>
                   </div>
                 ) : previewUrl ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="relative p-3 bg-black/80 rounded-xl border border-amber-500/30">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      padding: '12px', backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      borderRadius: '12px', border: '1px solid rgba(212, 175, 55, 0.3)'
+                    }}>
                       <img
                         src={previewUrl}
-                        alt="Preview"
-                        className="max-h-28 object-contain filter drop-shadow-md"
+                        alt="Processed Preview"
+                        style={{ maxHeight: '130px', objectFit: 'contain' }}
                       />
                     </div>
-                    <span className="text-[11px] text-amber-300 font-medium">Click or drag to replace image</span>
+                    <span style={{ fontSize: '11px', color: '#F3E5AB', fontWeight: '500' }}>Click or drag to replace image</span>
                   </div>
                 ) : (
                   <>
-                    <UploadCloud className="w-8 h-8 text-amber-400/80" />
-                    <span className="text-xs text-gray-300 font-medium">Click to choose image file (PNG, JPG, WebP)</span>
+                    <UploadCloud style={{ width: '32px', height: '32px', color: 'rgba(212, 175, 55, 0.7)' }} />
+                    <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: '500' }}>Click to upload jewellery image (PNG, JPG, WebP)</span>
+                    <span style={{ fontSize: '10px', color: '#6B7280' }}>100% full-resolution detail preservation</span>
                   </>
                 )}
               </div>
 
-              {/* Background Sensitivity Slider */}
-              {autoRemoveBg && previewUrl && (
-                <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex flex-col gap-1.5 mt-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
-                    <span className="flex items-center gap-1 text-amber-300">
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" /> Background Removal Sensitivity
-                    </span>
-                    <span className="text-amber-400 font-mono">{tolerance}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="80"
-                    step="2"
-                    value={tolerance}
-                    onChange={handleToleranceChange}
-                    className="w-full accent-amber-500"
-                  />
-                  <span className="text-[10px] text-gray-400">Slide to erase subtle background shadows or mannequin fabrics</span>
-                </div>
-              )}
-
+              {/* Error */}
               {errorMessage && (
-                <div className="bg-red-950/80 border border-red-500/50 text-red-200 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 mt-1">
-                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <div style={{
+                  backgroundColor: 'rgba(80, 10, 20, 0.8)',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  color: '#FECACA',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  display: 'flex', alignItems: 'center', gap: '8px'
+                }}>
+                  <AlertCircle style={{ width: '16px', height: '16px', color: '#F87171', flexShrink: 0 }} />
                   <span>{errorMessage}</span>
                 </div>
               )}
             </div>
 
-            {/* Item Name */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-300">Design Name</label>
+            {/* Design Name */}
+            <div>
+              <label style={labelStyle}>Design Name</label>
               <input
                 type="text"
-                placeholder="e.g. Marne Royal Jhumka Set"
+                placeholder="e.g. Marne Laxmi Coin Kundan Necklace"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="bg-gray-900 text-xs text-gray-200 px-3.5 py-2.5 rounded-xl border border-gray-800 focus:border-amber-500 focus:outline-none"
+                style={inputStyle}
               />
             </div>
 
-            {/* Category & Tag */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-300">Category</label>
+            {/* Category & Tag side by side */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="bg-gray-900 text-xs text-gray-200 px-3 py-2.5 rounded-xl border border-gray-800 focus:border-amber-500 focus:outline-none"
+                  style={{ ...inputStyle, appearance: 'auto' }}
                 >
-                  <option value="earrings">Earrings (Jhumkas)</option>
                   <option value="necklace">Necklace & Choker</option>
+                  <option value="earrings">Earrings (Jhumkas)</option>
                   <option value="maang_tikka">Maang Tikka</option>
                   <option value="nose_ring">Nose Ring (Nath)</option>
                 </select>
               </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-300">Badge Tag</label>
+              <div>
+                <label style={labelStyle}>Badge Tag</label>
                 <input
                   type="text"
-                  placeholder="e.g. Kundan / Bridal"
+                  placeholder="e.g. Laxmi Coin / Temple"
                   value={tag}
                   onChange={(e) => setTag(e.target.value)}
-                  className="bg-gray-900 text-xs text-gray-200 px-3 py-2.5 rounded-xl border border-gray-800 focus:border-amber-500 focus:outline-none"
+                  style={inputStyle}
                 />
               </div>
             </div>
 
-            <div className="mt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary text-xs"
-              >
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <button type="button" onClick={onClose} className="btn-secondary" style={{ fontSize: '12px', padding: '9px 18px' }}>
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isProcessing || !previewUrl}
-                className="btn-gold text-xs disabled:opacity-50"
+                className="btn-gold"
+                style={{ fontSize: '12px', padding: '9px 20px', opacity: (isProcessing || !previewUrl) ? 0.5 : 1 }}
               >
                 Add Design to Catalog
               </button>

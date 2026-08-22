@@ -26,38 +26,52 @@ export default function JewelleryCatalog({
   });
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      {/* Top Header & Search / Add New Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+      {/* Header Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 className="text-base font-bold font-heading text-gold-gradient flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+          <h2 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles style={{ width: '18px', height: '18px', color: '#D4AF37' }} />
             Jewellery Catalog
           </h2>
-          <p className="text-xs text-gray-400">Select any piece to try it on live video or photo</p>
+          <p style={{ fontSize: '12px', color: '#9499AD', margin: '4px 0 0 0' }}>Select any piece to try it on live video or photo</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Search Box */}
           {catalog.length > 0 && (
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div style={{ position: 'relative' }}>
+              <Search style={{ width: '14px', height: '14px', color: '#9499AD', position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
                 placeholder="Search design..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-gray-900 text-xs text-gray-200 pl-8 pr-3 py-1.5 rounded-full border border-gray-800 focus:border-amber-500 focus:outline-none w-36 sm:w-44 transition-all"
+                style={{
+                  backgroundColor: '#12141D',
+                  color: '#F5F6FA',
+                  fontSize: '12px',
+                  paddingLeft: '32px',
+                  paddingRight: '12px',
+                  paddingTop: '6px',
+                  paddingBottom: '6px',
+                  borderRadius: '9999px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  outline: 'none',
+                  width: '180px'
+                }}
               />
             </div>
           )}
 
-          {/* Upload Custom Jewellery Button */}
+          {/* Add Custom Jewellery Button */}
           <button
+            type="button"
             onClick={onOpenUploadModal}
-            className="btn-gold text-xs px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shrink-0"
+            className="btn-gold"
+            style={{ fontSize: '12px', padding: '8px 16px' }}
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle style={{ width: '14px', height: '14px' }} />
             <span>Add Jewellery Design</span>
           </button>
         </div>
@@ -65,16 +79,24 @@ export default function JewelleryCatalog({
 
       {/* Category Pills */}
       {catalog.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div style={{ display: 'flex', items: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
           {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
+              type="button"
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 border ${
-                activeCategory === cat.id
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-sm'
-                  : 'bg-gray-900/50 text-gray-400 border-gray-800 hover:text-gray-200'
-              }`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '9999px',
+                fontSize: '12px',
+                fontWeight: '600',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+                border: activeCategory === cat.id ? '1px solid rgba(212, 175, 55, 0.6)' : '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: activeCategory === cat.id ? 'rgba(212, 175, 55, 0.2)' : 'rgba(18, 20, 29, 0.6)',
+                color: activeCategory === cat.id ? '#F3E5AB' : '#9499AD',
+                transition: 'all 0.2s ease'
+              }}
             >
               {cat.label}
             </button>
@@ -83,17 +105,31 @@ export default function JewelleryCatalog({
       )}
 
       {/* Product Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-h-[360px] overflow-y-auto pr-1">
-        {/* Upload Card always available first */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px', maxHeight: '360px', overflowY: 'auto' }}>
+        {/* Upload Card */}
         <div
           onClick={onOpenUploadModal}
-          className="group rounded-xl p-4 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-800 hover:border-amber-500/60 bg-gray-900/30 hover:bg-gray-900/60 min-h-[160px] gap-2"
+          style={{
+            borderRadius: '12px',
+            padding: '16px',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            border: '2px dashed rgba(212, 175, 55, 0.4)',
+            backgroundColor: 'rgba(18, 20, 29, 0.4)',
+            minHeight: '160px',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
         >
-          <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-            <Plus className="w-5 h-5 stroke-[2.5]" />
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.15)', border: '1px solid rgba(212, 175, 55, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4AF37' }}>
+            <Plus style={{ width: '20px', height: '20px' }} />
           </div>
-          <span className="text-xs font-bold text-amber-300">Add New Design</span>
-          <span className="text-[10px] text-gray-500">Upload photo of your jewellery</span>
+          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#F3E5AB' }}>Add New Design</span>
+          <span style={{ fontSize: '10px', color: '#9499AD' }}>Upload photo of your jewellery</span>
         </div>
 
         {/* Existing Jewellery Items */}
@@ -103,43 +139,47 @@ export default function JewelleryCatalog({
             <div
               key={item.id}
               onClick={() => onSelectItem(item)}
-              className={`group relative rounded-xl p-3 cursor-pointer transition-all duration-200 flex flex-col justify-between border ${
-                isSelected
-                  ? 'bg-amber-950/40 border-amber-400 shadow-[0_0_15px_rgba(212,175,55,0.25)]'
-                  : 'bg-gray-900/40 border-gray-800 hover:border-amber-500/40 hover:bg-gray-900/80'
-              }`}
+              style={{
+                position: 'relative',
+                borderRadius: '12px',
+                padding: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                border: isSelected ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: isSelected ? 'rgba(212, 175, 55, 0.15)' : 'rgba(18, 20, 29, 0.5)',
+                boxShadow: isSelected ? '0 0 15px rgba(212, 175, 55, 0.3)' : 'none',
+                transition: 'all 0.2s ease'
+              }}
             >
-              {/* Active Checkmark */}
               {isSelected && (
-                <div className="absolute top-2 right-2 text-amber-400 z-10">
-                  <CheckCircle2 className="w-4 h-4 fill-amber-400 text-black" />
+                <div style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 10 }}>
+                  <CheckCircle2 style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
                 </div>
               )}
 
-              {/* Tag Badge */}
               {item.tag && (
-                <div className="absolute top-2 left-2 z-10">
-                  <span className="badge-gold text-[9px] px-2 py-0.5">
+                <div style={{ position: 'absolute', top: '8px', left: '8px', zIndex: 10 }}>
+                  <span className="badge-gold" style={{ fontSize: '9px', padding: '2px 8px' }}>
                     {item.tag}
                   </span>
                 </div>
               )}
 
-              {/* Image Preview */}
-              <div className="w-full h-28 flex items-center justify-center p-2 rounded-lg bg-black/40 border border-gray-800/50 group-hover:border-amber-500/30 transition-colors my-1">
+              <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '8px', backgroundColor: 'rgba(0, 0, 0, 0.4)', margin: '4px 0' }}>
                 <img
                   src={item.imageUrl}
                   alt={item.name}
-                  className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-105 transition-transform duration-200"
+                  style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                 />
               </div>
 
-              {/* Title */}
-              <div className="mt-1">
-                <h3 className="text-xs font-semibold text-gray-200 line-clamp-1 group-hover:text-amber-300 transition-colors">
+              <div>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#F5F6FA', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {item.name}
                 </h3>
-                <p className="text-[10px] text-gray-400 capitalize mt-0.5">
+                <p style={{ fontSize: '10px', color: '#9499AD', margin: '2px 0 0 0', textTransform: 'capitalize' }}>
                   {item.category.replace('_', ' ')}
                 </p>
               </div>

@@ -1,13 +1,13 @@
-// 3D AI Face Mesh Landmark Geometry, Pose Estimation & Perspective Calculators
+// 3D AI Face Mesh Landmark Geometry, Pose Estimation & Realistic Body Anchoring
 
 /**
- * Calculates 3D transform (x, y, scaleX, scaleY, angle, yaw, pitch, roll, shadowOffset)
+ * Calculates realistic 3D transform for wearing jewellery naturally on skin
  * @param {Array} landmarks - 468 3D landmark points from MediaPipe Face Mesh
  * @param {string} category - 'earrings' | 'necklace' | 'maang_tikka' | 'nose_ring'
- * @param {number} canvasWidth - Canvas width in pixels
- * @param {number} canvasHeight - Canvas height in pixels
+ * @param {number} canvasWidth
+ * @param {number} canvasHeight
  * @param {Object} fineTune - Fine tuning offsets { scale, offsetY, tilt, opacity }
- * @param {boolean} isMirrored - True if webcam mode (selfie camera)
+ * @param {boolean} isMirrored - True if selfie camera mode
  */
 export function calculateJewelleryTransform(
   landmarks,
@@ -23,25 +23,25 @@ export function calculateJewelleryTransform(
 
   const { scale: userScale = 1.0, offsetY: userOffsetY = 0, tilt: userTilt = 0 } = fineTune;
 
-  // Helper to get 3D coords for a landmark index with mirror support
+  // Helper to retrieve 3D coordinates in canvas pixel space
   const getPoint = (idx) => {
     const lm = landmarks[idx];
     const rawX = isMirrored ? (1 - lm.x) : lm.x;
     return {
       x: rawX * canvasWidth,
       y: lm.y * canvasHeight,
-      z: (lm.z || 0) * canvasWidth // Z-depth in canvas pixel units
+      z: (lm.z || 0) * canvasWidth
     };
   };
 
-  // 1. Key Facial Reference Points
+  // Key Facial & Structural Landmarks
   const noseTip = getPoint(4);
   const foreheadTop = getPoint(10);
   const chin = getPoint(152);
-  let leftEar = getPoint(177);  // Earlobe Left
-  let rightEar = getPoint(401); // Earlobe Right
-  let leftJaw = getPoint(172);
-  let rightJaw = getPoint(397);
+  let leftEar = getPoint(177);  // Left Earlobe
+  let rightEar = getPoint(401); // Right Earlobe
+  let leftJaw = getPoint(172);  // Left Jawline
+  let rightJaw = getPoint(397); // Right Jawline
 
   if (isMirrored) {
     const tempEar = leftEar;
@@ -53,39 +53,75 @@ export function calculateJewelleryTransform(
     rightJaw = tempJaw;
   }
 
-  // 2. Compute 3D Head Orientation (Yaw, Pitch, Roll)
+  // 1. 3D Pose Angles (Roll, Yaw, Pitch)
   const dxEars = rightEar.x - leftEar.x;
   const dyEars = rightEar.y - leftEar.y;
-  const dzEars = rightEar.z - leftEar.z;
-
   const roll = Math.atan2(dyEars, dxEars) + (userTilt * Math.PI / 180);
-  const earDistance = Math.hypot(dxEars, dyEars);
 
-  // Head Yaw (turn left/right)
+  const earDistance = Math.hypot(dxEars, dyEars);
+  const faceHeight = Math.hypot(chin.x - foreheadTop.x, chin.y - foreheadTop.y);
+
+  // Yaw: Left/Right head turn (-1 to +1)
   const faceCenterX = (leftEar.x + rightEar.x) / 2;
   const yaw = Math.sin((noseTip.x - faceCenterX) / (earDistance / 2));
 
-  // Head Pitch (tilt up/down)
-  const faceHeight = Math.hypot(chin.x - foreheadTop.x, chin.y - foreheadTop.y);
-  const pitch = Math.sin((noseTip.y - ((foreheadTop.y + chin.y) / 2)) / (faceHeight / 2));
+  // Pitch: Up/Down head tilt (-1 to +1)
+  const faceCenterY = (foreheadTop.y + chin.y) / 2;
+  const pitch = Math.sin((noseTip.y - faceCenterY) / (faceHeight / 2));
 
-  // Perspective 3D Scale Factors
-  const cosYaw = Math.max(0.4, Math.cos(yaw));
-  const cosPitch = Math.max(0.5, Math.cos(pitch));
+  // 3D Perspective Scale Compressions
+  const cosYaw = Math.max(0.45, Math.cos(yaw));
+  const cosPitch = Math.max(0.55, Math.cos(pitch));
 
   const yShift = userOffsetY * (canvasHeight * 0.008);
 
-  // 3. Category Specific 3D Perspective Anchoring
+  // 2. Realistic Anchoring by Jewellery Category
+
+  if (category === 'necklace') {
+    const jawWidth = Math.hypot(rightJaw.x - leftJaw.x, rightJaw.y - leftJaw.y);
+    const baseScale = (jawWidth / 125) * userScale;
+
+    // REALISTIC NECK & CLAVICLE ANCHORING:
+    // A necklace rests on the chest/collarbone below the neck, NOT attached to chin.
+    // It remains anchored on the chest plane even when head tilts up/down.
+    const neckCenterX = chin.x + (yaw * jawWidth * 0.15);
+
+    // Collarbone rest position math:
+    const collarboneDistance = faceHeight * 0.38;
+    const pitchCorrection = pitch * faceHeight * 0.12; // Compensate head pitch tilt
+    const necklaceY = chin.y + collarboneDistance + pitchCorrection + yShift;
+
+    return {
+      type: 'single',
+      x: neckCenterX,
+      y: necklaceY,
+      scaleX: baseScale * cosYaw,
+      scaleY: baseScale * cosPitch,
+      angle: roll * 0.75, // Neck rotates slightly less than full head roll
+      yaw,
+      pitch,
+      roll,
+      shadowBlur: 20 * baseScale,
+      shadowOffsetY: 12 * baseScale,
+      contactShadowColor: 'rgba(25, 10, 0, 0.45)'
+    };
+  }
 
   if (category === 'earrings') {
     const baseScale = (earDistance / 175) * userScale;
 
-    // Perspective depth offset: Far ear shrinks & hides behind jaw, near ear enlarges
-    const leftScale = baseScale * (1 - yaw * 0.35);
-    const rightScale = baseScale * (1 + yaw * 0.35);
+    // Gravity Dangle Effect: Heavy jhumkas hang vertically with damped roll angle
+    const jhumkaAngle = roll * 0.4;
 
-    // Natural vertical drop below earlobes
-    const earDropY = (faceHeight * 0.04);
+    // Earlobe Vertical Drop
+    const earDropY = (faceHeight * 0.045);
+
+    // 3D Occlusion: Far earring shrinks and fades when turning head
+    const leftYawFactor = 1 - (yaw * 0.45);
+    const rightYawFactor = 1 + (yaw * 0.45);
+
+    const leftOpacity = Math.max(0.15, Math.min(1.0, leftYawFactor));
+    const rightOpacity = Math.max(0.15, Math.min(1.0, rightYawFactor));
 
     return {
       type: 'pair',
@@ -93,54 +129,33 @@ export function calculateJewelleryTransform(
       pitch,
       roll,
       left: {
-        x: leftEar.x - (yaw * 12),
+        x: leftEar.x - (yaw * 14),
         y: leftEar.y + earDropY + yShift,
-        scaleX: leftScale * cosYaw,
-        scaleY: leftScale * cosPitch,
-        angle: roll,
-        shadowBlur: 14 * leftScale,
-        shadowOffsetY: 8 * leftScale
+        scaleX: baseScale * leftYawFactor * cosYaw,
+        scaleY: baseScale * cosPitch,
+        angle: jhumkaAngle,
+        opacity: leftOpacity,
+        shadowBlur: 14 * baseScale,
+        shadowOffsetY: 8 * baseScale
       },
       right: {
-        x: rightEar.x - (yaw * 12),
+        x: rightEar.x - (yaw * 14),
         y: rightEar.y + earDropY + yShift,
-        scaleX: rightScale * cosYaw,
-        scaleY: rightScale * cosPitch,
-        angle: roll,
-        shadowBlur: 14 * rightScale,
-        shadowOffsetY: 8 * rightScale
+        scaleX: baseScale * rightYawFactor * cosYaw,
+        scaleY: baseScale * cosPitch,
+        angle: jhumkaAngle,
+        opacity: rightOpacity,
+        shadowBlur: 14 * baseScale,
+        shadowOffsetY: 8 * baseScale
       },
       scale: baseScale
     };
   }
 
-  if (category === 'necklace') {
-    const jawWidth = Math.hypot(rightJaw.x - leftJaw.x, rightJaw.y - leftJaw.y);
-    const baseScale = (jawWidth / 130) * userScale;
-
-    // Position necklace curved below chin base on upper collarbone
-    const necklaceX = chin.x;
-    const necklaceY = chin.y + (jawWidth * 0.24) + (pitch * 25) + yShift;
-
-    return {
-      type: 'single',
-      x: necklaceX,
-      y: necklaceY,
-      scaleX: baseScale * cosYaw,
-      scaleY: baseScale * cosPitch,
-      angle: roll,
-      yaw,
-      pitch,
-      roll,
-      shadowBlur: 18 * baseScale,
-      shadowOffsetY: 10 * baseScale
-    };
-  }
-
   if (category === 'maang_tikka') {
     const tikkaX = foreheadTop.x;
-    const tikkaY = foreheadTop.y + (pitch * 15) + yShift;
-    const baseScale = (faceHeight / 190) * userScale;
+    const tikkaY = foreheadTop.y + (pitch * 10) + yShift;
+    const baseScale = (faceHeight / 195) * userScale;
 
     return {
       type: 'single',
@@ -158,31 +173,26 @@ export function calculateJewelleryTransform(
   }
 
   if (category === 'nose_ring') {
-    let nostril = getPoint(242); // Left nostril
+    let nostril = getPoint(242);
     let rightNostril = getPoint(462);
 
-    if (isMirrored) {
-      nostril = rightNostril;
-    }
+    if (isMirrored) nostril = rightNostril;
 
     const noseWidth = Math.hypot(rightNostril.x - nostril.x, rightNostril.y - nostril.y);
     const baseScale = (Math.max(noseWidth, 16) / 22) * userScale;
 
-    const nathX = nostril.x;
-    const nathY = nostril.y + yShift;
-
     return {
       type: 'single',
-      x: nathX,
-      y: nathY,
+      x: nostril.x,
+      y: nostril.y + yShift,
       scaleX: baseScale * cosYaw,
       scaleY: baseScale * cosPitch,
       angle: roll,
       yaw,
       pitch,
       roll,
-      shadowBlur: 8 * baseScale,
-      shadowOffsetY: 4 * baseScale
+      shadowBlur: 6 * baseScale,
+      shadowOffsetY: 3 * baseScale
     };
   }
 
@@ -196,8 +206,8 @@ function getFallbackTransform(category, width, height, fineTune = {}) {
   if (category === 'earrings') {
     return {
       type: 'pair',
-      left: { x: width * 0.38, y: height * 0.48 + offsetY, scaleX: 0.9 * scale, scaleY: 0.9 * scale, angle: rad, shadowBlur: 10, shadowOffsetY: 6 },
-      right: { x: width * 0.62, y: height * 0.48 + offsetY, scaleX: 0.9 * scale, scaleY: 0.9 * scale, angle: rad, shadowBlur: 10, shadowOffsetY: 6 },
+      left: { x: width * 0.38, y: height * 0.48 + offsetY, scaleX: 0.9 * scale, scaleY: 0.9 * scale, angle: rad, opacity: 1, shadowBlur: 10, shadowOffsetY: 6 },
+      right: { x: width * 0.62, y: height * 0.48 + offsetY, scaleX: 0.9 * scale, scaleY: 0.9 * scale, angle: rad, opacity: 1, shadowBlur: 10, shadowOffsetY: 6 },
       scale: 0.9 * scale
     };
   }
@@ -209,8 +219,8 @@ function getFallbackTransform(category, width, height, fineTune = {}) {
       scaleX: 1.0 * scale,
       scaleY: 1.0 * scale,
       angle: rad,
-      shadowBlur: 14,
-      shadowOffsetY: 8
+      shadowBlur: 16,
+      shadowOffsetY: 10
     };
   }
   if (category === 'maang_tikka') {

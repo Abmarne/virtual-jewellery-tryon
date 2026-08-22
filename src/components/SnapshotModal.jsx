@@ -40,44 +40,85 @@ export default function SnapshotModal({ isOpen, onClose, canvasRef, selectedItem
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="glass-card w-full max-w-lg p-6 rounded-2xl border border-yellow-500/40 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div style={{
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      zIndex: 9999,
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      backdropFilter: 'blur(12px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px'
+    }}>
+      <div className="glass-card" style={{
+        width: '100%',
+        maxWidth: '520px',
+        padding: '28px',
+        borderRadius: '20px',
+        border: '1px solid rgba(212, 175, 55, 0.4)',
+        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+        position: 'relative'
+      }}>
+        {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-100 bg-gray-900/60 p-1.5 rounded-full"
+          style={{
+            position: 'absolute', top: '16px', right: '16px',
+            background: 'rgba(30, 30, 40, 0.8)',
+            border: 'none', borderRadius: '50%',
+            width: '32px', height: '32px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9CA3AF', cursor: 'pointer'
+          }}
         >
-          <X className="w-4 h-4" />
+          <X style={{ width: '16px', height: '16px' }} />
         </button>
 
-        <div className="flex items-center gap-2 mb-3">
-          <Camera className="w-5 h-5 text-amber-400" />
-          <h2 className="text-lg font-bold font-heading text-gold-gradient">
-            Marne Jewellery Virtual Snapshot
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <Camera style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
+          <h2 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+            Virtual Snapshot
           </h2>
         </div>
 
-        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden border border-amber-500/30 bg-black mb-5 shadow-lg flex items-center justify-center">
+        {/* Preview Image */}
+        <div style={{
+          width: '100%',
+          aspectRatio: '4 / 3',
+          borderRadius: '14px',
+          overflow: 'hidden',
+          border: '1px solid rgba(212, 175, 55, 0.3)',
+          backgroundColor: '#000',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
           <img
             src={snapshotUrl}
             alt="Marne Jewellery Virtual Try-On"
-            className="w-full h-full object-contain"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={handleDownload}
-            className="btn-gold text-xs justify-center py-3"
-          >
-            <Download className="w-4 h-4" />
+        {/* Action Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <button onClick={handleDownload} className="btn-gold" style={{ fontSize: '12px', padding: '12px 16px', justifyContent: 'center' }}>
+            <Download style={{ width: '16px', height: '16px' }} />
             <span>Download HD Photo</span>
           </button>
 
           <button
             onClick={handleWhatsAppShare}
-            className="btn-secondary text-xs justify-center py-3 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 hover:border-emerald-400"
+            className="btn-secondary"
+            style={{
+              fontSize: '12px', padding: '12px 16px', justifyContent: 'center',
+              borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7'
+            }}
           >
-            <Share2 className="w-4 h-4 text-emerald-400" />
+            <Share2 style={{ width: '16px', height: '16px', color: '#34D399' }} />
             <span>Share on WhatsApp</span>
           </button>
         </div>
