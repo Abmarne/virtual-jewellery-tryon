@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
-import { User, Upload, Check, Image as ImageIcon } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { User, Upload, Check, Image as ImageIcon, AlertCircle, RefreshCw } from 'lucide-react';
 import { SAMPLE_MODELS } from '../utils/sampleData';
+import { analyzeImageQuality } from '../utils/imageProcessor';
 
 export default function ModelAvatarPicker({
   mode,
@@ -10,14 +11,37 @@ export default function ModelAvatarPicker({
   uploadedPhotoUrl
 }) {
   const fileInputRef = useRef(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setErrorMessage('');
+    setIsProcessing(true);
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      onUploadPhoto(event.target.result);
+      const srcUrl = event.target.result;
+      const img = new Image();
+      img.onload = () => {
+        const qualityCheck = analyzeImageQuality(img);
+
+        if (!qualityCheck.isOk) {
+          setErrorMessage(qualityCheck.reason || 'Image quality is too low or blurry. Please upload a clearer portrait photo.');
+          setIsProcessing(false);
+          return;
+        }
+
+        onUploadPhoto(srcUrl);
+        setIsProcessing(false);
+      };
+      img.onerror = () => {
+        setErrorMessage('Failed to read photo. Please upload a valid JPG or PNG image.');
+        setIsProcessing(false);
+      };
+      img.src = srcUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -33,10 +57,11 @@ export default function ModelAvatarPicker({
         {/* Upload Custom Photo Button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+          disabled={isProcessing}
+          className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all disabled:opacity-50"
         >
-          <Upload className="w-3.5 h-3.5" />
-          <span>Upload Your Photo</span>
+          {isProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Upload className="w-3.5 h-3.5" />}
+          <span>{isProcessing ? 'Processing...' : 'Upload Your Photo'}</span>
         </button>
 
         <input
@@ -55,7 +80,10 @@ export default function ModelAvatarPicker({
           return (
             <div
               key={model.id}
-              onClick={() => onSelectModel(model)}
+              onClick={() => {
+                setErrorMessage('');
+                onSelectModel(model);
+              }}
               className={`group relative rounded-xl overflow-hidden cursor-pointer border transition-all duration-200 aspect-[4/3] flex flex-col justify-end p-2.5 ${
                 isSelected
                   ? 'border-amber-400 shadow-[0_0_15px_rgba(212,175,55,0.4)] ring-2 ring-amber-400/50'
@@ -91,8 +119,16 @@ export default function ModelAvatarPicker({
         })}
       </div>
 
+      {/* Error Toast for Low Quality Photos */}
+      {errorMessage && (
+        <div className="bg-red-950/80 border border-red-500/50 text-red-200 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       {/* Uploaded Custom Photo Indicator */}
-      {mode === 'upload' && uploadedPhotoUrl && (
+      {mode === 'upload' && uploadedPhotoUrl && !errorMessage && (
         <div className="flex items-center gap-3 bg-amber-950/30 border border-amber-500/40 p-2.5 rounded-xl">
           <img
             src={uploadedPhotoUrl}
@@ -102,9 +138,9 @@ export default function ModelAvatarPicker({
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-amber-200 flex items-center gap-1">
               <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-              Custom Photo Uploaded
+              Custom Photo Active
             </p>
-            <p className="text-[10px] text-gray-400">AI face mesh active on your photo</p>
+            <p className="text-[10px] text-gray-400">AI face landmark scanner active on your photo</p>
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
