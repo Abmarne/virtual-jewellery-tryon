@@ -15,40 +15,29 @@ const PROGRESS_STAGES = [
   { id: 'enhance', label: 'Enhancing Realism', icon: '4' },
 ];
 
-// Map progress messages to stage indices
-function getStageFromMessage(msg) {
-  const m = (msg || '').toLowerCase();
-  if (m.includes('analyz')) return 0;
-  if (m.includes('understand') || m.includes('design')) return 1;
-  if (m.includes('apply') || m.includes('calling') || m.includes('generat')) return 2;
-  if (m.includes('enhanc') || m.includes('realism')) return 3;
-  if (m.includes('complete')) return 4;
-  return -1;
-}
-
-export default function AIGeneratedTryOnStudio({
-  catalog,
-  selectedItem,
-  onSelectItem,
-  onOpenUploadModal
-}) {
-  const [customerPhotoUrl, setCustomerPhotoUrl] = useState(null);
-  const personInputRef = useRef(null);
-
+export default function AIGeneratedTryOnStudio({ selectedItem, customerPhotoUrl: propPhotoUrl, onPhotoUpload: propOnUpload }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStage, setCurrentStage] = useState(-1);
   const [progressMessage, setProgressMessage] = useState('');
-  const [aiResultUrl, setAiResultUrl] = useState(null);
-  const [showBefore, setShowBefore] = useState(false);
-
-  // Generation history (max 5)
-  const [history, setHistory] = useState([]);
-  const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
-
-  // Error state
+  const [currentStage, setCurrentStage] = useState(0);
   const [error, setError] = useState(null);
 
-  // Download dropdown
+  // Customer photo internal state fallback
+  const [internalPhotoUrl, setInternalPhotoUrl] = useState(null);
+  const activeCustomerPhotoUrl = propPhotoUrl || internalPhotoUrl;
+
+  const handleSetCustomerPhoto = (url) => {
+    setInternalPhotoUrl(url);
+    if (typeof propOnUpload === 'function') {
+      try { propOnUpload(url); } catch (e) { console.warn('onPhotoUpload prop notice:', e); }
+    }
+  };
+
+  // Results & History
+  const [aiResultUrl, setAiResultUrl] = useState(null);
+  const [landmarkUrl, setLandmarkUrl] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [activeHistoryIndex, setActiveHistoryIndex] = useState(0);
+  const [showBefore, setShowBefore] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const downloadRef = useRef(null);
 
@@ -63,7 +52,7 @@ export default function AIGeneratedTryOnStudio({
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
-  // Fine tune position & scale state
+  // Fine tune alignment & size state
   const [fineTune, setFineTune] = useState({ scale: 1.0, offsetY: 0, offsetX: 0, tilt: 0, opacity: 1.0 });
   const [showFineTune, setShowFineTune] = useState(false);
 
@@ -81,95 +70,100 @@ export default function AIGeneratedTryOnStudio({
     }
     img.onload = () => setLoadedJewelleryImg(img);
     img.onerror = () => {
-      const fallback = new Image();
-      fallback.onload = () => setLoadedJewelleryImg(fallback);
-      fallback.onerror = () => setLoadedJewelleryImg(null);
-      fallback.src = url;
+      const fb = new Image();
+      fb.onload = () => setLoadedJewelleryImg(fb);
+      fb.onerror = () => setLoadedJewelleryImg(null);
+      fb.src = url;
     };
     img.src = url;
   }, [selectedItem]);
 
   useEffect(() => {
-    if (!customerPhotoUrl) {
+    if (!activeCustomerPhotoUrl) {
       setLoadedPersonImg(null);
       return;
     }
-    const url = customerPhotoUrl;
+    const url = activeCustomerPhotoUrl;
     const img = new Image();
     if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
       img.crossOrigin = 'anonymous';
     }
     img.onload = () => setLoadedPersonImg(img);
     img.onerror = () => {
-      const fallback = new Image();
-      fallback.onload = () => setLoadedPersonImg(fallback);
-      fallback.onerror = () => setLoadedPersonImg(null);
-      fallback.src = url;
+      const fb = new Image();
+      fb.onload = () => setLoadedPersonImg(fb);
+      fb.onerror = () => setLoadedPersonImg(null);
+      fb.src = url;
     };
     img.src = url;
-  }, [customerPhotoUrl]);
+  }, [activeCustomerPhotoUrl]);
 
-  // Close download menu on outside click
   useEffect(() => {
-    function handleClick(e) {
+    const handleClickOutside = (e) => {
       if (downloadRef.current && !downloadRef.current.contains(e.target)) {
         setShowDownloadMenu(false);
       }
-    }
-    if (showDownloadMenu) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }
-  }, [showDownloadMenu]);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const personInputRef = useRef(null);
 
   const handleUploadPersonPhoto = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setCustomerPhotoUrl(ev.target.result);
-      setAiResultUrl(null);
-      setError(null);
-      setHistory([]);
-      setActiveHistoryIndex(-1);
-    };
-    reader.readAsDataURL(file);
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        handleSetCustomerPhoto(event.target.result);
+        setAiResultUrl(null);
+        setError(null);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleOpenCamera = async () => {
+  // Attach video stream as soon as modal mounts in DOM
+  useEffect(() => {
+    if (isCameraOpen && streamRef.current && videoRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      video.onloadedmetadata = () => {
+        video.play().then(() => {
+          setIsCameraLoading(false);
+        }).catch((e) => {
+          console.warn('Video play warning:', e);
+          setIsCameraLoading(false);
+        });
+      };
+      const fallbackTimer = setTimeout(() => {
+        setIsCameraLoading(false);
+      }, 800);
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [isCameraOpen]);
+
+  const startCamera = async () => {
     setIsCameraOpen(true);
     setCameraError(null);
     setIsCameraLoading(true);
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
       });
       streamRef.current = stream;
-      setIsCameraLoading(false);
-
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch((e) => console.warn('Camera play warning:', e));
-        }
-      }, 100);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().then(() => setIsCameraLoading(false)).catch(() => setIsCameraLoading(false));
+      }
     } catch (err) {
       console.error('Camera access error:', err);
+      setCameraError('Unable to access webcam. Please check permissions or upload a photo file.');
       setIsCameraLoading(false);
-      setCameraError(
-        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-          ? 'Camera permission denied. Please allow camera permissions in your browser.'
-          : 'Unable to access camera. Please check your camera device.'
-      );
     }
   };
 
-  const handleCloseCamera = () => {
+  const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -178,38 +172,76 @@ export default function AIGeneratedTryOnStudio({
     setCameraError(null);
   };
 
-  const handleCapturePhoto = () => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
+  const capturePhotoFromCamera = () => {
+    try {
+      const video = videoRef.current;
+      if (!video) {
+        console.error('No video element found for camera snap.');
+        return;
+      }
 
-    // Horizontal mirror for selfie mode
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+      const vWidth = video.videoWidth || video.offsetWidth || video.clientWidth || 1280;
+      const vHeight = video.videoHeight || video.offsetHeight || video.clientHeight || 720;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const capturedDataUrl = canvas.toDataURL('image/png', 1.0);
+      if (vWidth === 0 || vHeight === 0) {
+        console.warn('Camera stream dimensions not initialized yet.');
+        return;
+      }
 
-    handleCloseCamera();
-    setCustomerPhotoUrl(capturedDataUrl);
-    setAiResultUrl(null);
-    setError(null);
-    setHistory([]);
-    setActiveHistoryIndex(-1);
+      const canvas = document.createElement('canvas');
+      canvas.width = vWidth;
+      canvas.height = vHeight;
+      const ctx = canvas.getContext('2d');
+
+      // Mirror selfie frame
+      ctx.translate(vWidth, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, vWidth, vHeight);
+
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+      if (!dataUrl || dataUrl.length < 100) {
+        console.error('Captured canvas output invalid base64 string.');
+        return;
+      }
+
+      // 1. Immediately pass photo to helper
+      handleSetCustomerPhoto(dataUrl);
+
+      // 2. Preload image element directly for generator
+      const img = new Image();
+      img.onload = () => {
+        setLoadedPersonImg(img);
+      };
+      img.onerror = () => {
+        console.warn('Loaded person img fallback');
+      };
+      img.src = dataUrl;
+
+      setAiResultUrl(null);
+      setError(null);
+      stopCamera();
+    } catch (err) {
+      console.error('Error during camera snap capture:', err);
+    }
   };
 
-  const [landmarkUrl, setLandmarkUrl] = useState(null);
-  const [viewMode, setViewMode] = useState('ai'); // 'ai' | 'landmark' | 'original'
+  const getStageFromMessage = (msg) => {
+    if (msg.includes('Analyzing') || msg.includes('Resolving')) return 0;
+    if (msg.includes('Detecting') || msg.includes('Understanding')) return 1;
+    if (msg.includes('Calculating') || msg.includes('Synthesizing') || msg.includes('Compositing')) return 2;
+    if (msg.includes('Harmonizing') || msg.includes('Refining') || msg.includes('Finalizing')) return 3;
+    return 0;
+  };
+
+  const [viewMode, setViewMode] = useState('ai');
 
   const handleGenerateAI = async () => {
     if (!selectedItem) {
       setError({ type: 'input', title: 'No Design Selected', message: 'Please select a jewellery design from the catalog first.', retryable: false });
       return;
     }
-    if (!customerPhotoUrl || !loadedPersonImg) {
+    if (!activeCustomerPhotoUrl || !loadedPersonImg) {
       setError({ type: 'input', title: 'No Photo Uploaded', message: 'Please upload your portrait photo first.', retryable: false });
       return;
     }
@@ -225,7 +257,7 @@ export default function AIGeneratedTryOnStudio({
     try {
       const res = await generateHuggingFaceTryOn(
         {
-          personImg: loadedPersonImg || customerPhotoUrl,
+          personImg: loadedPersonImg || activeCustomerPhotoUrl,
           jewelleryImg: loadedJewelleryImg || selectedItem?.imageUrl,
           category: selectedItem.category,
           item: selectedItem,
@@ -244,7 +276,6 @@ export default function AIGeneratedTryOnStudio({
       setAiResultUrl(mainUrl);
       setLandmarkUrl(lmkUrl);
 
-      // Add to history (max 5)
       setHistory((prev) => {
         const updated = [mainUrl, ...prev].slice(0, 5);
         return updated;
@@ -252,7 +283,7 @@ export default function AIGeneratedTryOnStudio({
       setActiveHistoryIndex(0);
 
       setIsGenerating(false);
-      setCurrentStage(4); // All complete
+      setCurrentStage(4);
     } catch (err) {
       console.error('AI Try-On error:', err);
       setError(err?.title ? err : {
@@ -284,14 +315,12 @@ export default function AIGeneratedTryOnStudio({
       let w = img.naturalWidth;
       let h = img.naturalHeight;
 
-      // Resize if maxDim specified
       if (maxDim && (w > maxDim || h > maxDim)) {
         const ratio = Math.min(maxDim / w, maxDim / h);
         w = Math.round(w * ratio);
         h = Math.round(h * ratio);
       }
 
-      // Upscale for 4K
       if (maxDim && maxDim > img.naturalWidth) {
         const ratio = maxDim / Math.max(img.naturalWidth, img.naturalHeight);
         w = Math.round(img.naturalWidth * ratio);
@@ -320,12 +349,10 @@ export default function AIGeneratedTryOnStudio({
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
-  // Current displayed result
-  const displayUrl = showBefore ? customerPhotoUrl : aiResultUrl;
+  const displayUrl = showBefore ? activeCustomerPhotoUrl : aiResultUrl;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
-      {/* Hidden File Input */}
       <input
         ref={personInputRef}
         type="file"
@@ -334,153 +361,194 @@ export default function AIGeneratedTryOnStudio({
         onChange={handleUploadPersonPhoto}
       />
 
-      {/* API KEY WARNING */}
-      {!apiKeyReady && (
-        <div className="api-key-warning" id="api-key-warning">
-          <div className="api-key-warning-icon">
-            <Key style={{ width: '18px', height: '18px' }} />
-          </div>
-          <div className="api-key-warning-content">
-            <h4>Hugging Face API Key Required</h4>
-            <p>
-              To use AI-powered virtual try-on, add your free API token to the <strong>.env</strong> file:<br />
-              <code style={{ fontSize: '11px', color: '#F3E5AB', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>
-                VITE_HF_API_TOKEN=hf_your_token_here
-              </code><br />
-              <span style={{ marginTop: '4px', display: 'inline-block' }}>
-                Get a free token at{' '}
-                <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer">
-                  huggingface.co/settings/tokens
-                </a>
-              </span>
-            </p>
+      {/* WEBCAM MODAL */}
+      {isCameraOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div className="glass-card" style={{
+            width: '100%', maxWidth: '640px', padding: '24px', borderRadius: '24px',
+            display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#FFF', margin: 0 }}>
+                  Take Photo with Camera
+                </h3>
+              </div>
+              <button
+                onClick={stopCamera}
+                style={{ background: 'none', border: 'none', color: '#A0A0A0', cursor: 'pointer', padding: '4px' }}
+              >
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            {cameraError ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#FF6B6B', fontSize: '14px' }}>
+                {cameraError}
+              </div>
+            ) : (
+              <div style={{
+                position: 'relative', width: '100%', aspectRatio: '4/3', backgroundColor: '#000',
+                borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                {isCameraLoading && (
+                  <div style={{ color: '#D4AF37', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <RefreshCw style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} />
+                    Starting Camera...
+                  </div>
+                )}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    width: '100%', height: '100%', objectFit: 'cover',
+                    transform: 'scaleX(-1)', display: isCameraLoading ? 'none' : 'block'
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button type="button" onClick={stopCamera} className="btn-secondary" style={{ padding: '10px 20px', fontSize: '13px' }}>
+                Cancel
+              </button>
+              {!cameraError && (
+                <button
+                  type="button"
+                  onClick={capturePhotoFromCamera}
+                  className="btn-gold"
+                  disabled={isCameraLoading}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '13px',
+                    opacity: isCameraLoading ? 0.6 : 1,
+                    cursor: isCameraLoading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Capture Snap
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* STEP 1 & STEP 2 CARDS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        {/* CARD 1: Selected Jewellery Design */}
-        <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
+      {/* TOP SECTION: STEP 1 & STEP 2 CARDS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+        
+        {/* STEP 1: SELECTED JEWELLERY DESIGN */}
+        <div className="glass-card" style={{ padding: '24px', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '1px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', color: '#F3E5AB' }}>
-                1
-              </div>
-              <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#F5F6FA', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="step-badge">1</div>
+              <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#FFF', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
                 Select Jewellery Design
               </h3>
             </div>
             {selectedItem && (
-              <span className="badge-gold" style={{ fontSize: '10px' }}>
-                {selectedItem.category?.replace('_', ' ') || 'Design'}
+              <span className="gold-tag" style={{ fontSize: '11px', padding: '3px 10px' }}>
+                {selectedItem.category || 'Jewellery'}
               </span>
             )}
           </div>
 
           <div style={{
-            width: '100%',
-            height: '180px',
-            borderRadius: '12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            border: '1px solid rgba(212, 175, 55, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '12px',
-            position: 'relative'
+            position: 'relative', width: '100%', height: '220px', borderRadius: '14px',
+            backgroundColor: 'rgba(0, 0, 0, 0.4)', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
             {selectedItem ? (
               <img
                 src={selectedItem.imageUrl}
                 alt={selectedItem.name}
-                style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
               />
             ) : (
-              <span style={{ fontSize: '12px', color: '#9499AD' }}>Select any design below</span>
+              <div style={{ textAlign: 'center', color: '#71717A', padding: '20px' }}>
+                <ImageIcon style={{ width: '40px', height: '40px', margin: '0 auto 8px', opacity: 0.4 }} />
+                <p style={{ fontSize: '13px', margin: 0 }}>Select a jewellery item from the catalog below</p>
+              </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#F3E5AB' }}>
-              {selectedItem?.name || 'No Design Selected'}
-            </span>
-            <button
-              onClick={onOpenUploadModal}
-              className="btn-secondary"
-              style={{ fontSize: '11px', padding: '6px 12px' }}
-            >
-              + Upload Design
-            </button>
-          </div>
+          {selectedItem && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#FFF', margin: '0 0 2px' }}>
+                  {selectedItem.name}
+                </h4>
+                <p style={{ fontSize: '12px', color: '#A0A0A0', margin: 0 }}>
+                  {selectedItem.description || 'Custom Jewellery Piece'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* CARD 2: Customer Person Photo */}
-        <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* STEP 2: UPLOAD CUSTOMER PHOTO */}
+        <div className="glass-card" style={{ padding: '24px', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '1px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', color: '#F3E5AB' }}>
-                2
-              </div>
-              <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#F5F6FA', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="step-badge">2</div>
+              <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#FFF', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
                 Upload Your Photo
               </h3>
             </div>
-
-            {customerPhotoUrl && (
-              <span style={{ fontSize: '10px', color: '#34D399', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 style={{ width: '12px', height: '12px' }} /> Photo Ready
-              </span>
-            )}
           </div>
 
-          <div style={{
-            width: '100%',
-            height: '180px',
-            borderRadius: '12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            border: '1px dashed rgba(212, 175, 55, 0.3)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            overflow: 'hidden',
-            cursor: 'pointer'
-          }}
-          onClick={() => !customerPhotoUrl && personInputRef.current?.click()}
+          <div
+            onClick={() => personInputRef.current?.click()}
+            style={{
+              position: 'relative', width: '100%', height: '220px', borderRadius: '14px',
+              backgroundColor: 'rgba(0, 0, 0, 0.4)', overflow: 'hidden',
+              border: activeCustomerPhotoUrl ? '1px solid rgba(212, 175, 55, 0.4)' : '2px dashed rgba(255, 255, 255, 0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
           >
-            {customerPhotoUrl ? (
+            {activeCustomerPhotoUrl ? (
               <img
-                src={customerPhotoUrl}
-                alt="Customer Photo"
+                src={activeCustomerPhotoUrl}
+                alt="User Photo"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px', textAlign: 'center' }}>
-                <UploadCloud style={{ width: '32px', height: '32px', color: '#D4AF37' }} />
-                <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: '500' }}>Upload photo or snap with camera</span>
-                <span style={{ fontSize: '10px', color: '#6B7280' }}>JPG, PNG, WebP format supported</span>
+              <div style={{ textAlign: 'center', color: '#71717A', padding: '20px' }}>
+                <UploadCloud style={{ width: '44px', height: '44px', color: '#D4AF37', margin: '0 auto 12px', opacity: 0.8 }} />
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#E4E4E7', margin: '0 0 4px' }}>
+                  Upload photo or snap with camera
+                </p>
+                <p style={{ fontSize: '12px', color: '#71717A', margin: 0 }}>
+                  JPG, PNG, WebP format supported
+                </p>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
             <button
+              type="button"
               onClick={() => personInputRef.current?.click()}
               className="btn-gold"
-              style={{ fontSize: '11px', padding: '7px 12px', flex: 1 }}
+              style={{ fontSize: '12px', padding: '9px 16px', flex: 1 }}
             >
-              <UploadCloud style={{ width: '14px', height: '14px' }} />
-              <span>{customerPhotoUrl ? 'Change File' : 'Upload File'}</span>
+              <UploadCloud style={{ width: '15px', height: '15px' }} />
+              <span>{activeCustomerPhotoUrl ? 'Change File' : 'Upload File'}</span>
             </button>
-
             <button
-              onClick={handleOpenCamera}
+              type="button"
+              onClick={startCamera}
               className="btn-secondary"
-              style={{ fontSize: '11px', padding: '7px 12px', flex: 1 }}
+              style={{ fontSize: '12px', padding: '9px 16px', flex: 1 }}
             >
-              <Camera style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
+              <Camera style={{ width: '15px', height: '15px', color: '#D4AF37' }} />
               <span>Take Photo</span>
             </button>
           </div>
@@ -523,41 +591,46 @@ export default function AIGeneratedTryOnStudio({
         </div>
       )}
 
-      {/* GENERATE TRY-ON & FINE TUNE BUTTONS */}
+      {/* PRIMARY ACTION BUTTONS: GENERATE AI TRY-ON & ADJUST ALIGNMENT */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
         <button
+          type="button"
           onClick={handleGenerateAI}
-          disabled={!selectedItem || !customerPhotoUrl || isGenerating || !apiKeyReady}
+          disabled={!selectedItem || !activeCustomerPhotoUrl || isGenerating || !apiKeyReady}
           className="btn-gold"
           id="generate-tryon-btn"
           style={{
-            fontSize: '15px',
-            padding: '14px 36px',
+            fontSize: '16px',
+            padding: '16px 48px',
             borderRadius: '9999px',
-            opacity: (!selectedItem || !customerPhotoUrl || isGenerating || !apiKeyReady) ? 0.5 : 1,
-            cursor: (!selectedItem || !customerPhotoUrl || isGenerating || !apiKeyReady) ? 'not-allowed' : 'pointer',
-            boxShadow: '0 0 25px rgba(212, 175, 55, 0.4)'
+            opacity: (!selectedItem || !activeCustomerPhotoUrl || isGenerating || !apiKeyReady) ? 0.5 : 1,
+            cursor: (!selectedItem || !activeCustomerPhotoUrl || isGenerating || !apiKeyReady) ? 'not-allowed' : 'pointer',
+            boxShadow: '0 0 30px rgba(212, 175, 55, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
           }}
         >
           {isGenerating ? (
             <>
-              <RefreshCw style={{ width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} />
-              <span>Generating...</span>
+              <RefreshCw style={{ width: '22px', height: '22px', animation: 'spin 1s linear infinite' }} />
+              <span>Generating AI Try-On...</span>
             </>
           ) : (
             <>
-              <Wand2 style={{ width: '20px', height: '20px' }} />
+              <Wand2 style={{ width: '22px', height: '22px' }} />
               <span>Generate AI Try-On</span>
             </>
           )}
         </button>
 
         <button
+          type="button"
           onClick={() => setShowFineTune(!showFineTune)}
           className={showFineTune ? 'btn-gold' : 'btn-secondary'}
           style={{
             fontSize: '13px',
-            padding: '12px 22px',
+            padding: '14px 24px',
             borderRadius: '9999px',
             display: 'flex',
             alignItems: 'center',
@@ -565,7 +638,7 @@ export default function AIGeneratedTryOnStudio({
           }}
         >
           <SlidersHorizontal style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
-          <span>{showFineTune ? 'Hide Fit Adjuster' : 'Adjust Fit & Position'}</span>
+          <span>{showFineTune ? 'Hide Adjuster' : 'Adjust Alignment & Size'}</span>
         </button>
       </div>
 
@@ -591,291 +664,153 @@ export default function AIGeneratedTryOnStudio({
 
       {/* ERROR CARD */}
       {error && !isGenerating && (
-        <div className={`error-card ${error.type === 'loading' || error.type === 'rate_limit' ? 'warning' : ''}`} id="error-card">
-          <div className="error-card-title">
-            {error.type === 'loading' || error.type === 'rate_limit' ? (
-              <AlertTriangle style={{ width: '18px', height: '18px' }} />
-            ) : (
-              <XCircle style={{ width: '18px', height: '18px' }} />
-            )}
-            {error.title}
-          </div>
-          <div className="error-card-message">
-            {error.message}
+        <div className="error-card" style={{
+          padding: '16px 20px', borderRadius: '16px', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <XCircle style={{ width: '20px', height: '20px', color: '#EF4444', flexShrink: 0 }} />
+            <div>
+              <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#FCA5A5', margin: '0 0 2px' }}>
+                {error.title}
+              </h4>
+              <p style={{ fontSize: '12px', color: '#FECACA', margin: 0 }}>
+                {error.message}
+              </p>
+            </div>
           </div>
           {error.retryable && (
-            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-              <button
-                onClick={handleGenerateAI}
-                className="btn-gold"
-                style={{ fontSize: '12px', padding: '8px 20px' }}
-              >
-                <RefreshCw style={{ width: '14px', height: '14px' }} />
-                <span>Retry</span>
-              </button>
-            </div>
+            <button
+              onClick={handleGenerateAI}
+              className="btn-secondary"
+              style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
+            >
+              Retry
+            </button>
           )}
         </div>
       )}
 
-      {/* RESULT VIEWPORT */}
-      {aiResultUrl && !isGenerating && !error && (
-        <div className="glass-card result-viewport" id="result-viewport" style={{ padding: '24px', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid #D4AF37', boxShadow: '0 0 35px rgba(212, 175, 55, 0.25)' }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+      {/* AI TRY-ON RESULT VIEWPORT */}
+      {aiResultUrl && !isGenerating && (
+        <div className="glass-card" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Header Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Sparkles style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
-              <h3 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#FFF', margin: 0 }}>
                 AI Try-On Result
               </h3>
-              <span className="result-badge">
-                <Zap style={{ width: '10px', height: '10px' }} /> AI Neural Try-On
+              <span className="gold-tag" style={{ fontSize: '11px', padding: '3px 10px' }}>
+                AI Neural Try-On
               </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Before / After Toggle */}
               <button
                 onClick={() => setShowBefore(!showBefore)}
                 className="btn-secondary"
-                style={{ fontSize: '11px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ fontSize: '12px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Eye style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
                 <span>{showBefore ? 'View AI Try-On' : 'View Original Photo'}</span>
               </button>
 
+              {/* Regenerate Button */}
               <button
                 onClick={handleGenerateAI}
                 className="btn-secondary"
-                style={{ fontSize: '11px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ fontSize: '12px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <RefreshCw style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
                 <span>Regenerate</span>
               </button>
+
+              {/* Download Dropdown */}
+              <div ref={downloadRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  className="btn-gold"
+                  style={{ fontSize: '12px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Download style={{ width: '14px', height: '14px' }} />
+                  <span>Download</span>
+                  <ChevronDown style={{ width: '12px', height: '12px' }} />
+                </button>
+
+                {showDownloadMenu && (
+                  <div className="download-menu" style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: '8px', zIndex: 100,
+                    width: '200px', backgroundColor: '#18181B', border: '1px solid rgba(212, 175, 55, 0.3)',
+                    borderRadius: '14px', padding: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                    display: 'flex', flexDirection: 'column', gap: '4px'
+                  }}>
+                    <button onClick={() => handleDownload('png', 1.0)} className="download-menu-item">
+                      <span>PNG (Original High Res)</span>
+                    </button>
+                    <button onClick={() => handleDownload('jpg', 0.92)} className="download-menu-item">
+                      <span>JPG (Standard)</span>
+                    </button>
+                    <button onClick={() => handleDownload('jpg', 0.98, 1920)} className="download-menu-item">
+                      <span>HD 1080p Web</span>
+                    </button>
+                    <button onClick={() => handleDownload('png', 1.0, 3840)} className="download-menu-item">
+                      <span>4K Ultra HD</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Result Image Frame */}
+          {/* MAIN PHOTO RESULT CANVAS */}
           <div style={{
-            width: '100%',
-            maxHeight: '520px',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            backgroundColor: '#000',
-            border: '1px solid rgba(212, 175, 55, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative'
+            position: 'relative', width: '100%', maxHeight: '680px', borderRadius: '16px',
+            backgroundColor: '#09090B', overflow: 'hidden', border: '1px solid rgba(212, 175, 55, 0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
             <img
-              src={showBefore ? customerPhotoUrl : aiResultUrl}
-              alt="Virtual Try-On Result"
-              style={{ maxHeight: '520px', maxWidth: '100%', objectFit: 'contain' }}
+              src={displayUrl}
+              alt="AI Try-On Result"
+              style={{ maxWidth: '100%', maxHeight: '680px', objectFit: 'contain' }}
             />
-            {/* View Mode Tag */}
-            <div style={{
-              position: 'absolute',
-              top: '12px',
-              left: '12px',
-              background: 'rgba(0,0,0,0.75)',
-              padding: '4px 10px',
-              borderRadius: '8px',
-              fontSize: '10px',
-              fontWeight: '600',
-              color: showBefore ? '#9499AD' : '#F3E5AB',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(212, 175, 55, 0.3)'
-            }}>
-              {showBefore ? '📷 Original Photo' : '✨ AI Photorealistic Try-On'}
-            </div>
+            {showBefore && (
+              <div style={{
+                position: 'absolute', top: '16px', left: '16px',
+                backgroundColor: 'rgba(0,0,0,0.75)', color: '#FFF', fontSize: '11px',
+                padding: '4px 12px', borderRadius: '9999px', border: '1px solid rgba(255,255,255,0.2)'
+              }}>
+                Original Photo
+              </div>
+            )}
           </div>
 
-          {/* Generation History Strip */}
+          {/* GENERATION HISTORY CAROUSEL STRIP */}
           {history.length > 1 && (
-            <div>
-              <p style={{ fontSize: '11px', color: '#9499AD', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Generation History
-              </p>
-              <div className="history-strip">
-                {history.map((url, i) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#9499AD', letterSpacing: '0.5px' }}>
+                GENERATION HISTORY ({history.length})
+              </span>
+              <div className="history-strip" style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {history.map((url, idx) => (
                   <div
-                    key={`hist-${i}`}
-                    className={`history-thumb ${activeHistoryIndex === i ? 'selected' : ''}`}
-                    onClick={() => handleHistorySelect(i)}
+                    key={idx}
+                    onClick={() => handleHistorySelect(idx)}
+                    style={{
+                      width: '72px', height: '72px', borderRadius: '12px', overflow: 'hidden',
+                      border: activeHistoryIndex === idx ? '2px solid #D4AF37' : '1px solid rgba(255,255,255,0.1)',
+                      cursor: 'pointer', flexShrink: 0, opacity: activeHistoryIndex === idx ? 1 : 0.6,
+                      transition: 'all 0.2s ease'
+                    }}
                   >
-                    <img src={url} alt={`Generation ${i + 1}`} />
-                    <span className="history-thumb-index">#{i + 1}</span>
+                    <img src={url} alt={`History ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Action Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            {/* Download with dropdown */}
-            <div className="download-dropdown-wrapper" ref={downloadRef} style={{ width: '100%' }}>
-              <button
-                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                className="btn-gold"
-                id="download-btn"
-                style={{ fontSize: '13px', padding: '12px 20px', justifyContent: 'center', width: '100%' }}
-              >
-                <Download style={{ width: '16px', height: '16px' }} />
-                <span>Download</span>
-                <ChevronDown style={{ width: '14px', height: '14px', transform: showDownloadMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-              </button>
-
-              {showDownloadMenu && (
-                <div className="download-menu">
-                  <button className="download-menu-item" onClick={() => handleDownload('png', 1.0, null)}>
-                    <ImageIcon style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
-                    <span>Original Quality</span>
-                    <span className="format-tag">PNG</span>
-                  </button>
-                  <button className="download-menu-item" onClick={() => handleDownload('jpg', 0.85, null)}>
-                    <ImageIcon style={{ width: '14px', height: '14px', color: '#9499AD' }} />
-                    <span>Compressed</span>
-                    <span className="format-tag">JPG</span>
-                  </button>
-                  <button className="download-menu-item" onClick={() => handleDownload('png', 1.0, 1920)}>
-                    <ImageIcon style={{ width: '14px', height: '14px', color: '#6EE7B7' }} />
-                    <span>HD 1080p</span>
-                    <span className="format-tag">PNG</span>
-                  </button>
-                  <button className="download-menu-item" onClick={() => handleDownload('png', 1.0, 3840)}>
-                    <ImageIcon style={{ width: '14px', height: '14px', color: '#F3E5AB' }} />
-                    <span>4K Ultra HD</span>
-                    <span className="format-tag">PNG</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleWhatsAppShare}
-              className="btn-secondary"
-              id="share-whatsapp-btn"
-              style={{ fontSize: '13px', padding: '12px 20px', justifyContent: 'center', borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
-            >
-              <Share2 style={{ width: '16px', height: '16px', color: '#34D399' }} />
-              <span>Share on WhatsApp</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CAMERA CAPTURE MODAL */}
-      {isCameraOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 9999,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          backdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '16px'
-        }}>
-          <div className="glass-card" style={{
-            width: '100%',
-            maxWidth: '560px',
-            padding: '24px',
-            borderRadius: '20px',
-            border: '1px solid rgba(212, 175, 55, 0.4)',
-            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
-            {/* Modal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Camera style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
-                <h3 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
-                  Take Photo with Camera
-                </h3>
-              </div>
-              <button
-                onClick={handleCloseCamera}
-                style={{
-                  background: 'rgba(30, 30, 40, 0.8)',
-                  border: 'none', borderRadius: '50%',
-                  width: '32px', height: '32px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#9CA3AF', cursor: 'pointer'
-                }}
-              >
-                <X style={{ width: '16px', height: '16px' }} />
-              </button>
-            </div>
-
-            {/* Video Stream Container / Error message */}
-            <div style={{
-              width: '100%',
-              height: '320px',
-              borderRadius: '14px',
-              backgroundColor: '#000',
-              border: '1px solid rgba(212, 175, 55, 0.3)',
-              overflow: 'hidden',
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {isCameraLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                  <RefreshCw style={{ width: '32px', height: '32px', color: '#D4AF37', animation: 'spin 1s linear infinite' }} />
-                  <span style={{ fontSize: '12px', color: '#F3E5AB' }}>Starting camera feed...</span>
-                </div>
-              )}
-
-              {cameraError ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#F87171', fontSize: '13px' }}>
-                  <AlertTriangle style={{ width: '32px', height: '32px', color: '#F87171', margin: '0 auto 10px auto', display: 'block' }} />
-                  {cameraError}
-                </div>
-              ) : (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    transform: 'scaleX(-1)' // Mirror view for selfie feel
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Modal Actions */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button
-                onClick={handleCloseCamera}
-                className="btn-secondary"
-                style={{ fontSize: '12px', padding: '9px 18px' }}
-              >
-                Cancel
-              </button>
-
-              {!cameraError && (
-                <button
-                  onClick={handleCapturePhoto}
-                  disabled={isCameraLoading}
-                  className="btn-gold"
-                  style={{ fontSize: '13px', padding: '10px 24px' }}
-                >
-                  <Camera style={{ width: '16px', height: '16px' }} />
-                  <span>Capture Snap</span>
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>
