@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles, UploadCloud, RefreshCw, Download, Share2,
   CheckCircle2, Wand2, Eye, AlertTriangle, XCircle,
-  ChevronDown, Image as ImageIcon, Key, Zap
+  ChevronDown, Image as ImageIcon, Key, Zap, Camera, X
 } from 'lucide-react';
 import { generateHuggingFaceTryOn, isApiKeyConfigured } from '../utils/huggingFaceAiEngine';
 
@@ -55,6 +55,13 @@ export default function AIGeneratedTryOnStudio({
   const [loadedJewelleryImg, setLoadedJewelleryImg] = useState(null);
   const [loadedPersonImg, setLoadedPersonImg] = useState(null);
 
+  // Camera capture state
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
   const apiKeyReady = isApiKeyConfigured();
 
   useEffect(() => {
@@ -106,6 +113,71 @@ export default function AIGeneratedTryOnStudio({
       setActiveHistoryIndex(-1);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleOpenCamera = async () => {
+    setIsCameraOpen(true);
+    setCameraError(null);
+    setIsCameraLoading(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+      streamRef.current = stream;
+      setIsCameraLoading(false);
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch((e) => console.warn('Camera play warning:', e));
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Camera access error:', err);
+      setIsCameraLoading(false);
+      setCameraError(
+        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+          ? 'Camera permission denied. Please allow camera permissions in your browser.'
+          : 'Unable to access camera. Please check your camera device.'
+      );
+    }
+  };
+
+  const handleCloseCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+    setCameraError(null);
+  };
+
+  const handleCapturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+
+    // Horizontal mirror for selfie mode
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const capturedDataUrl = canvas.toDataURL('image/png', 1.0);
+
+    handleCloseCamera();
+    setCustomerPhotoUrl(capturedDataUrl);
+    setAiResultUrl(null);
+    setError(null);
+    setHistory([]);
+    setActiveHistoryIndex(-1);
   };
 
   const handleGenerateAI = async () => {
@@ -357,7 +429,7 @@ export default function AIGeneratedTryOnStudio({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px', textAlign: 'center' }}>
                 <UploadCloud style={{ width: '32px', height: '32px', color: '#D4AF37' }} />
-                <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: '500' }}>Click to upload your portrait photo</span>
+                <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: '500' }}>Upload photo or snap with camera</span>
                 <span style={{ fontSize: '10px', color: '#6B7280' }}>JPG, PNG, WebP format supported</span>
               </div>
             )}
@@ -367,10 +439,19 @@ export default function AIGeneratedTryOnStudio({
             <button
               onClick={() => personInputRef.current?.click()}
               className="btn-gold"
-              style={{ fontSize: '11px', padding: '7px 14px', flex: 1 }}
+              style={{ fontSize: '11px', padding: '7px 12px', flex: 1 }}
             >
               <UploadCloud style={{ width: '14px', height: '14px' }} />
-              <span>{customerPhotoUrl ? 'Change Photo' : 'Upload Photo'}</span>
+              <span>{customerPhotoUrl ? 'Change File' : 'Upload File'}</span>
+            </button>
+
+            <button
+              onClick={handleOpenCamera}
+              className="btn-secondary"
+              style={{ fontSize: '11px', padding: '7px 12px', flex: 1 }}
+            >
+              <Camera style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
+              <span>Take Photo</span>
             </button>
           </div>
         </div>
@@ -613,6 +694,120 @@ export default function AIGeneratedTryOnStudio({
               <Share2 style={{ width: '16px', height: '16px', color: '#34D399' }} />
               <span>Share on WhatsApp</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CAMERA CAPTURE MODAL */}
+      {isCameraOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 9999,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div className="glass-card" style={{
+            width: '100%',
+            maxWidth: '560px',
+            padding: '24px',
+            borderRadius: '20px',
+            border: '1px solid rgba(212, 175, 55, 0.4)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera style={{ width: '20px', height: '20px', color: '#D4AF37' }} />
+                <h3 className="font-heading text-gold-gradient" style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+                  Take Photo with Camera
+                </h3>
+              </div>
+              <button
+                onClick={handleCloseCamera}
+                style={{
+                  background: 'rgba(30, 30, 40, 0.8)',
+                  border: 'none', borderRadius: '50%',
+                  width: '32px', height: '32px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#9CA3AF', cursor: 'pointer'
+                }}
+              >
+                <X style={{ width: '16px', height: '16px' }} />
+              </button>
+            </div>
+
+            {/* Video Stream Container / Error message */}
+            <div style={{
+              width: '100%',
+              height: '320px',
+              borderRadius: '14px',
+              backgroundColor: '#000',
+              border: '1px solid rgba(212, 175, 55, 0.3)',
+              overflow: 'hidden',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {isCameraLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                  <RefreshCw style={{ width: '32px', height: '32px', color: '#D4AF37', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '12px', color: '#F3E5AB' }}>Starting camera feed...</span>
+                </div>
+              )}
+
+              {cameraError ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#F87171', fontSize: '13px' }}>
+                  <AlertTriangle style={{ width: '32px', height: '32px', color: '#F87171', margin: '0 auto 10px auto', display: 'block' }} />
+                  {cameraError}
+                </div>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: 'scaleX(-1)' // Mirror view for selfie feel
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                onClick={handleCloseCamera}
+                className="btn-secondary"
+                style={{ fontSize: '12px', padding: '9px 18px' }}
+              >
+                Cancel
+              </button>
+
+              {!cameraError && (
+                <button
+                  onClick={handleCapturePhoto}
+                  disabled={isCameraLoading}
+                  className="btn-gold"
+                  style={{ fontSize: '13px', padding: '10px 24px' }}
+                >
+                  <Camera style={{ width: '16px', height: '16px' }} />
+                  <span>Capture Snap</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
