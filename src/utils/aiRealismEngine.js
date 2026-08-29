@@ -1,14 +1,104 @@
 /**
  * AI Realism Engine for Photorealistic Jewellery Try-On
- * Runs 100% client-side in browser ($0 cost) using WebGL / HTML5 Canvas Matting.
+ * Runs 100% client-side in browser using HTML5 Canvas Matting & 3D Parabolic Mesh Warping.
  */
+
+const transparentCanvasCache = new WeakMap();
+
+/**
+ * Automatically removes solid backgrounds (white, gray, black, studio box) from jewellery images
+ */
+export function getTransparentJewelleryCanvas(img) {
+  if (!img) return null;
+  if (transparentCanvasCache.has(img)) {
+    return transparentCanvasCache.get(img);
+  }
+
+  const width = img.naturalWidth || img.width || 400;
+  const height = img.naturalHeight || img.height || 400;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+
+  try {
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    let transparentCount = 0;
+    for (let i = 3; i < data.length; i += 16) {
+      if (data[i] < 50) transparentCount++;
+    }
+
+    // If already has significant transparent background (>12%), cache & return
+    if (transparentCount > (data.length / 16) * 0.12) {
+      transparentCanvasCache.set(img, canvas);
+      return canvas;
+    }
+
+    // Sample corner pixels to detect background color
+    const corners = [
+      [0, 0],
+      [width - 1, 0],
+      [0, height - 1],
+      [width - 1, height - 1]
+    ];
+
+    let bgR = 0, bgG = 0, bgB = 0;
+    corners.forEach(([x, y]) => {
+      const idx = (y * width + x) * 4;
+      bgR += data[idx];
+      bgG += data[idx + 1];
+      bgB += data[idx + 2];
+    });
+    bgR /= 4;
+    bgG /= 4;
+    bgB /= 4;
+
+    const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+    const isLightBg = bgLum > 100;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      if (a < 10) continue;
+
+      const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      if (isLightBg) {
+        if (dist < 50 || (lum > 200 && Math.abs(r - g) < 25 && Math.abs(g - b) < 25)) {
+          data[i + 3] = 0;
+        } else if (dist < 80) {
+          const alphaFactor = (dist - 50) / 30;
+          data[i + 3] = Math.round(a * alphaFactor);
+        }
+      } else {
+        if (dist < 45 || (lum < 45 && Math.abs(r - g) < 25 && Math.abs(g - b) < 25)) {
+          data[i + 3] = 0;
+        } else if (dist < 75) {
+          const alphaFactor = (dist - 45) / 30;
+          data[i + 3] = Math.round(a * alphaFactor);
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  } catch (e) {
+    console.warn('Background matting notice:', e);
+  }
+
+  transparentCanvasCache.set(img, canvas);
+  return canvas;
+}
 
 /**
  * Samples ambient color temperature, luminance, and contrast from user's skin/neck region
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} neckX
- * @param {number} neckY
- * @returns {Object} { avgR, avgG, avgB, brightness, warmthRatio, contrast }
  */
 export function sampleSkinEnvironment(ctx, neckX, neckY) {
   try {
@@ -45,16 +135,12 @@ export function sampleSkinEnvironment(ctx, neckX, neckY) {
 }
 
 /**
- * 3D Neck Curve Warping: Distorts jewellery along a cylindrical grid to conform naturally to the curve of the neck/collarbones.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {HTMLImageElement} img
- * @param {Object} transform - { x, y, scaleX, scaleY, angle, yaw, pitch, roll }
- * @param {Object} options - { curveDepth, lightingMatch, shadowDepth, opacity }
- * @param {Object} skinEnv - Ambient skin environment sample
+ * 3D Neck Curve Warping & Realistic Rendering
  */
-export function drawWarpedJewelleryWithRealism(ctx, img, transform, options = {}, skinEnv = {}) {
-  if (!img || !transform) return;
+export function drawWarpedJewelleryWithRealism(ctx, rawImg, transform, options = {}, skinEnv = {}) {
+  if (!rawImg || !transform) return;
+
+  const img = getTransparentJewelleryCanvas(rawImg) || rawImg;
 
   const {
     curveDepth = 0.5,
@@ -70,12 +156,12 @@ export function drawWarpedJewelleryWithRealism(ctx, img, transform, options = {}
     yaw = 0
   } = transform;
 
-  const imgWidth = img.naturalWidth || img.width || 200;
-  const imgHeight = img.naturalHeight || img.height || 200;
-  const renderWidth = imgWidth * scaleX * 0.68;
-  const renderHeight = imgHeight * scaleY * 0.68;
+  const imgWidth = img.width || img.naturalWidth || 200;
+  const imgHeight = img.height || img.naturalHeight || 200;
+  const renderWidth = imgWidth * scaleX * 0.55;
+  const renderHeight = imgHeight * scaleY * 0.55;
 
-  const slices = 18; // 18 vertical slices for smooth cylindrical warping
+  const slices = 18;
   const sliceWidth = renderWidth / slices;
   const origSliceWidth = imgWidth / slices;
 
@@ -86,64 +172,60 @@ export function drawWarpedJewelleryWithRealism(ctx, img, transform, options = {}
   ctx.translate(x, y);
   ctx.rotate(angle);
 
-  // --- STAGE 1: Soft Directional Skin Contact Shadow Synthesis ---
+  // STAGE 1: Soft Directional Skin Contact Shadow
   if (shadowDepth > 0.05) {
     ctx.save();
-    ctx.globalAlpha = opacity * shadowDepth * 0.55;
-    ctx.shadowColor = `rgba(${Math.round(skinEnv.avgR * 0.2 || 20)}, ${Math.round(skinEnv.avgG * 0.1 || 10)}, 0, 0.85)`;
-    ctx.shadowBlur = 18 + shadowDepth * 12;
-    ctx.shadowOffsetY = 8 + shadowDepth * 8;
+    ctx.globalAlpha = opacity * shadowDepth * 0.5;
+    ctx.shadowColor = `rgba(${Math.round((skinEnv.avgR || 200) * 0.15)}, ${Math.round((skinEnv.avgG || 170) * 0.1)}, 0, 0.8)`;
+    ctx.shadowBlur = 16 + shadowDepth * 10;
+    ctx.shadowOffsetY = 6 + shadowDepth * 6;
 
     ctx.drawImage(img, -renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
     ctx.restore();
   }
 
-  // --- STAGE 2: 3D Cylindrical Neck Curve Warping & Lighting Harmonization ---
-  // Create offscreen canvas for color matched jewellery
+  // STAGE 2: Color Temperature & Room Lighting Matching Pass
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = imgWidth;
   tempCanvas.height = imgHeight;
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.drawImage(img, 0, 0);
 
-  // Ambient Lighting & Color Temperature Harmonization Pass
   if (lightingMatch > 0.05 && skinEnv.brightness) {
-    const imgData = tempCtx.getImageData(0, 0, imgWidth, imgHeight);
-    const data = imgData.data;
+    try {
+      const imgData = tempCtx.getImageData(0, 0, imgWidth, imgHeight);
+      const data = imgData.data;
 
-    // Target brightness & warmth from user's skin photo
-    const targetLum = Math.max(0.4, Math.min(1.2, skinEnv.brightness / 0.65));
-    const warmthMult = Math.max(0.85, Math.min(1.25, skinEnv.warmthRatio / 1.15));
+      const targetLum = Math.max(0.4, Math.min(1.2, skinEnv.brightness / 0.65));
+      const warmthMult = Math.max(0.85, Math.min(1.25, (skinEnv.warmthRatio || 1.2) / 1.15));
+      const blendFactor = lightingMatch * 0.4;
 
-    const blendFactor = lightingMatch * 0.45;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 10) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
 
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] > 10) { // Non-transparent pixel
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
+          let newR = r * ((1 - blendFactor) + blendFactor * targetLum * warmthMult);
+          let newG = g * ((1 - blendFactor) + blendFactor * targetLum);
+          let newB = b * ((1 - blendFactor) + blendFactor * targetLum / warmthMult);
 
-        // Apply room brightness matching
-        let newR = r * ((1 - blendFactor) + blendFactor * targetLum * warmthMult);
-        let newG = g * ((1 - blendFactor) + blendFactor * targetLum);
-        let newB = b * ((1 - blendFactor) + blendFactor * targetLum / warmthMult);
-
-        data[i] = Math.max(0, Math.min(255, newR));
-        data[i + 1] = Math.max(0, Math.min(255, newG));
-        data[i + 2] = Math.max(0, Math.min(255, newB));
+          data[i] = Math.max(0, Math.min(255, newR));
+          data[i + 1] = Math.max(0, Math.min(255, newG));
+          data[i + 2] = Math.max(0, Math.min(255, newB));
+        }
       }
+      tempCtx.putImageData(imgData, 0, 0);
+    } catch (e) {
+      // ignore
     }
-    tempCtx.putImageData(imgData, 0, 0);
   }
 
-  // Render 18-slice parabolic warp along neck cylinder
+  // STAGE 3: 3D Parabolic Cylindrical Neck Curve Rendering
   const halfSlices = slices / 2;
   for (let i = 0; i < slices; i++) {
-    // Parabolic neck curve displacement formula
-    const normalizedPos = (i - halfSlices) / halfSlices; // -1 to +1
-    const curveOffset = Math.pow(normalizedPos, 2) * (renderHeight * 0.15) * curveDepth;
-
-    // 3D Perspective foreshortening based on head yaw
+    const normalizedPos = (i - halfSlices) / halfSlices;
+    const curveOffset = Math.pow(normalizedPos, 2) * (renderHeight * 0.12) * curveDepth;
     const slicePerspectiveScale = 1 - (normalizedPos * yaw * 0.2);
 
     const sliceX = -renderWidth / 2 + i * sliceWidth;
@@ -154,16 +236,6 @@ export function drawWarpedJewelleryWithRealism(ctx, img, transform, options = {}
       i * origSliceWidth, 0, origSliceWidth, imgHeight,
       sliceX, sliceY, sliceWidth * 1.02, renderHeight * slicePerspectiveScale
     );
-  }
-
-  // --- STAGE 3: Ambient Skin Reflective Highlight ---
-  if (skinEnv.avgR) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'soft-light';
-    ctx.globalAlpha = opacity * 0.18 * lightingMatch;
-    ctx.fillStyle = `rgb(${Math.round(skinEnv.avgR)}, ${Math.round(skinEnv.avgG)}, ${Math.round(skinEnv.avgB)})`;
-    ctx.fillRect(-renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
-    ctx.restore();
   }
 
   ctx.restore();

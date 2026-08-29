@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles, UploadCloud, RefreshCw, Download, Share2,
   CheckCircle2, Wand2, Eye, AlertTriangle, XCircle,
-  ChevronDown, Image as ImageIcon, Key, Zap, Camera, X
+  ChevronDown, Image as ImageIcon, Key, Zap, Camera, X, SlidersHorizontal
 } from 'lucide-react';
 import { generateHuggingFaceTryOn, isApiKeyConfigured } from '../utils/huggingFaceAiEngine';
+import FineTuneControls from './FineTuneControls';
 
 // Progress stage definitions
 const PROGRESS_STAGES = [
@@ -62,6 +63,10 @@ export default function AIGeneratedTryOnStudio({
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
+  // Fine tune position & scale state
+  const [fineTune, setFineTune] = useState({ scale: 1.0, offsetY: 0, offsetX: 0, tilt: 0, opacity: 1.0 });
+  const [showFineTune, setShowFineTune] = useState(false);
+
   const apiKeyReady = isApiKeyConfigured();
 
   useEffect(() => {
@@ -69,11 +74,19 @@ export default function AIGeneratedTryOnStudio({
       setLoadedJewelleryImg(null);
       return;
     }
+    const url = selectedItem.imageUrl;
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => setLoadedJewelleryImg(img);
-    img.onerror = () => setLoadedJewelleryImg(null);
-    img.src = selectedItem.imageUrl;
+    img.onerror = () => {
+      const fallback = new Image();
+      fallback.onload = () => setLoadedJewelleryImg(fallback);
+      fallback.onerror = () => setLoadedJewelleryImg(null);
+      fallback.src = url;
+    };
+    img.src = url;
   }, [selectedItem]);
 
   useEffect(() => {
@@ -81,11 +94,19 @@ export default function AIGeneratedTryOnStudio({
       setLoadedPersonImg(null);
       return;
     }
+    const url = customerPhotoUrl;
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => setLoadedPersonImg(img);
-    img.onerror = () => setLoadedPersonImg(null);
-    img.src = customerPhotoUrl;
+    img.onerror = () => {
+      const fallback = new Image();
+      fallback.onload = () => setLoadedPersonImg(fallback);
+      fallback.onerror = () => setLoadedPersonImg(null);
+      fallback.src = url;
+    };
+    img.src = url;
   }, [customerPhotoUrl]);
 
   // Close download menu on outside click
@@ -180,6 +201,9 @@ export default function AIGeneratedTryOnStudio({
     setActiveHistoryIndex(-1);
   };
 
+  const [landmarkUrl, setLandmarkUrl] = useState(null);
+  const [viewMode, setViewMode] = useState('ai'); // 'ai' | 'landmark' | 'original'
+
   const handleGenerateAI = async () => {
     if (!selectedItem) {
       setError({ type: 'input', title: 'No Design Selected', message: 'Please select a jewellery design from the catalog first.', retryable: false });
@@ -195,15 +219,17 @@ export default function AIGeneratedTryOnStudio({
     setProgressMessage('Analyzing your photo...');
     setError(null);
     setAiResultUrl(null);
-    setShowBefore(false);
+    setLandmarkUrl(null);
+    setViewMode('ai');
 
     try {
-      const resultUrl = await generateHuggingFaceTryOn(
+      const res = await generateHuggingFaceTryOn(
         {
-          personImg: loadedPersonImg,
-          jewelleryImg: loadedJewelleryImg,
+          personImg: loadedPersonImg || customerPhotoUrl,
+          jewelleryImg: loadedJewelleryImg || selectedItem?.imageUrl,
           category: selectedItem.category,
-          item: selectedItem
+          item: selectedItem,
+          fineTune
         },
         (msg) => {
           setProgressMessage(msg);
@@ -212,11 +238,15 @@ export default function AIGeneratedTryOnStudio({
         }
       );
 
-      setAiResultUrl(resultUrl);
+      const mainUrl = typeof res === 'object' ? res.aiResultUrl : res;
+      const lmkUrl = typeof res === 'object' ? res.landmarkUrl : null;
+
+      setAiResultUrl(mainUrl);
+      setLandmarkUrl(lmkUrl);
 
       // Add to history (max 5)
       setHistory((prev) => {
-        const updated = [resultUrl, ...prev].slice(0, 5);
+        const updated = [mainUrl, ...prev].slice(0, 5);
         return updated;
       });
       setActiveHistoryIndex(0);
@@ -493,8 +523,8 @@ export default function AIGeneratedTryOnStudio({
         </div>
       )}
 
-      {/* GENERATE TRY-ON BUTTON */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      {/* GENERATE TRY-ON & FINE TUNE BUTTONS */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
         <button
           onClick={handleGenerateAI}
           disabled={!selectedItem || !customerPhotoUrl || isGenerating || !apiKeyReady}
@@ -521,7 +551,43 @@ export default function AIGeneratedTryOnStudio({
             </>
           )}
         </button>
+
+        <button
+          onClick={() => setShowFineTune(!showFineTune)}
+          className={showFineTune ? 'btn-gold' : 'btn-secondary'}
+          style={{
+            fontSize: '13px',
+            padding: '12px 22px',
+            borderRadius: '9999px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <SlidersHorizontal style={{ width: '16px', height: '16px', color: '#D4AF37' }} />
+          <span>{showFineTune ? 'Hide Fit Adjuster' : 'Adjust Fit & Position'}</span>
+        </button>
       </div>
+
+      {/* FINE TUNE ADJUSTER PANEL */}
+      {showFineTune && (
+        <FineTuneControls
+          fineTune={fineTune}
+          onChange={(newFT) => {
+            setFineTune(newFT);
+            if (aiResultUrl) {
+              handleGenerateAI();
+            }
+          }}
+          onReset={() => {
+            const resetFT = { scale: 1.0, offsetY: 0, offsetX: 0, tilt: 0, opacity: 1.0 };
+            setFineTune(resetFT);
+            if (aiResultUrl) {
+              handleGenerateAI();
+            }
+          }}
+        />
+      )}
 
       {/* ERROR CARD */}
       {error && !isGenerating && (
@@ -563,7 +629,7 @@ export default function AIGeneratedTryOnStudio({
                 AI Try-On Result
               </h3>
               <span className="result-badge">
-                <Zap style={{ width: '10px', height: '10px' }} /> AI Generated
+                <Zap style={{ width: '10px', height: '10px' }} /> AI Neural Try-On
               </span>
             </div>
 
@@ -574,7 +640,7 @@ export default function AIGeneratedTryOnStudio({
                 style={{ fontSize: '11px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Eye style={{ width: '14px', height: '14px', color: '#D4AF37' }} />
-                <span>{showBefore ? 'View AI Result' : 'View Original'}</span>
+                <span>{showBefore ? 'View AI Try-On' : 'View Original Photo'}</span>
               </button>
 
               <button
@@ -602,24 +668,25 @@ export default function AIGeneratedTryOnStudio({
             position: 'relative'
           }}>
             <img
-              src={displayUrl}
+              src={showBefore ? customerPhotoUrl : aiResultUrl}
               alt="Virtual Try-On Result"
               style={{ maxHeight: '520px', maxWidth: '100%', objectFit: 'contain' }}
             />
-            {/* Before/After label */}
+            {/* View Mode Tag */}
             <div style={{
               position: 'absolute',
               top: '12px',
               left: '12px',
-              background: 'rgba(0,0,0,0.65)',
+              background: 'rgba(0,0,0,0.75)',
               padding: '4px 10px',
               borderRadius: '8px',
               fontSize: '10px',
               fontWeight: '600',
-              color: showBefore ? '#9499AD' : '#34D399',
-              backdropFilter: 'blur(8px)'
+              color: showBefore ? '#9499AD' : '#F3E5AB',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(212, 175, 55, 0.3)'
             }}>
-              {showBefore ? 'Original Photo' : 'AI Generated'}
+              {showBefore ? '📷 Original Photo' : '✨ AI Photorealistic Try-On'}
             </div>
           </div>
 

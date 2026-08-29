@@ -79,12 +79,12 @@ export function calculateJewelleryTransform(
 
   if (category === 'necklace') {
     const jawWidth = Math.hypot(rightJaw.x - leftJaw.x, rightJaw.y - leftJaw.y);
-    const baseScale = (jawWidth / 140) * userScale;
+    const baseScale = (jawWidth / 210) * userScale;
 
-    // EXACT ANATOMICAL NECK FIT (MATCHES USER TARGET SCREENSHOT):
-    // Necklaces rest right at the collarbone line below the chin (chin.y + 0.28 * faceHeight).
-    const neckCenterX = chin.x + (yaw * jawWidth * 0.12);
-    const necklaceY = chin.y + (faceHeight * 0.28) + (pitch * faceHeight * 0.1) + yShift;
+    // ANATOMICAL NECK FIT:
+    // Necklaces rest right below the chin line at upper collarbones (chin.y + 0.15 * faceHeight)
+    const neckCenterX = chin.x + (yaw * jawWidth * 0.1) + (fineTune.offsetX || 0);
+    const necklaceY = chin.y + (faceHeight * 0.15) + (pitch * faceHeight * 0.05) + yShift;
 
     return {
       type: 'single',
@@ -96,8 +96,8 @@ export function calculateJewelleryTransform(
       yaw,
       pitch,
       roll,
-      shadowBlur: 16 * baseScale,
-      shadowOffsetY: 8 * baseScale,
+      shadowBlur: 14 * baseScale,
+      shadowOffsetY: 6 * baseScale,
       contactShadowColor: 'rgba(25, 10, 0, 0.45)'
     };
   }
@@ -206,13 +206,13 @@ function getFallbackTransform(category, width, height, fineTune = {}) {
   if (category === 'necklace') {
     return {
       type: 'single',
-      x: width * 0.50,
-      y: height * 0.65 + offsetY,
-      scaleX: 0.85 * scale,
-      scaleY: 0.85 * scale,
+      x: width * 0.50 + (fineTune.offsetX || 0),
+      y: height * 0.52 + offsetY,
+      scaleX: 0.42 * scale,
+      scaleY: 0.42 * scale,
       angle: rad,
-      shadowBlur: 16,
-      shadowOffsetY: 8
+      shadowBlur: 12,
+      shadowOffsetY: 6
     };
   }
   if (category === 'maang_tikka') {
